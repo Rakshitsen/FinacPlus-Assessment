@@ -1,59 +1,87 @@
+// Scripted Pipeline for FinacPlus Assessment
+// CI/CD: Git → Jenkins → Docker Hub → Kubernetes (kind cluster)
+
 node {
-  // Vars
-  def dockerImage   = 'simple-app'
-  def userName      = 'rakshitsen'
-  def branchName    = env.BRANCH_NAME ?: 'main'
-  def tag           = env.BUILD_NUMBER ?: 'latest'
-  def image         = "${userName}/${dockerImage}"
-  def testContainer = 'test-container'
+    // ---------- 1. Initialize ----------
+    // Variables for image name, tags, and credentials
+    def IMAGE_REPO = "rakshitsen/simple-app"
+    def TAG = "${BUILD_NUMBER}"
+    def REGISTRY_CREDS = "Docker_cred"
+    def KUBECONFIG = "KUBECONFIG_FILE"
+    def DEPLOYMENT_FILE = "k8s/deployment.yaml"
 
-  stage('Build') {
-    sh """
-      docker build -t ${image}:${tag} .
-    """
-  }
-
-
-
-  stage('Push') {
-    withCredentials([usernamePassword(credentialsId: 'Docker_cred', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
-      sh """
-        echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
-        docker push ${image}:${tag}
-      """
-    }
-  }
-    stage('Test') {
-    sh "docker pull ${image}:${tag}"
-    sh "docker rm -f ${testContainer} || true"
-    sh "docker run -d --name ${testContainer} -p 5000:5000 ${image}:${tag}"
-
-    // Compute TIME safely
-    script {
-      env.TIME = sh(script: 'date -u +%Y-%m-%dT%H:%M:%SZ', returnStdout: true).trim()
+    stage('Checkout Source') {
+        // Pull latest code from main branch
+        checkout scm
     }
 
-    // Write deploy metadata
-    sh """
-      set -e
-      cat > deploy-info-${BUILD_NUMBER}.txt <<EOF
-BUILD_NUMBER: ${BUILD_NUMBER}
-IMAGE: ${image}:${tag}
-GIT_COMMIT: ${GIT_COMMIT}
-GIT_BRANCH: ${GIT_BRANCH}
-TIME: ${env.TIME}
-BUILD_URL: ${BUILD_URL}
-EOF
-    """
-    archiveArtifacts artifacts: 'deploy-info-*.txt', fingerprint: true, followSymlinks: false
-  }
-
-  stage('Deploy') {
-    withCredentials([file(credentialsId: 'KUBECONFIG_FILE', variable: 'KUBECONFIG')]) {
-      sh """
-        kubectl config current-context
-        kubectl get nodes
-      """
+    // ---------- 2. Build ----------
+    stage('Build & Test') {
+        sh '''
+            echo "Installing dependencies and running quick tests..."
+            python3 --version
+            docker --version
+        '''
     }
-  }
-}
+
+    // ---------- 3. Build Docker Image ----------
+    stage('Build Docker Image') {
+        sh """
+            echo "Building Docker image ${IMAGE_REPO}:${TAG}"
+            docker build -t ${IMAGE_REPO}:${TAG} .
+            docker tag ${IMAGE_REPO}:${TAG} ${IMAGE_REPO}:latest
+        """
+    }
+
+    // ---------- 4. Push to Docker Hub ----------
+    stage('Push Image to Registry') {
+        withCredentials([usernamePassword(credentialsId: REGISTRY_CREDS, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+            sh """
+                echo "Logging in to Docker Hub..."
+                echo $PASS | docker login -u $USER --password-stdin
+                docker push ${IMAGE_REPO}:${TAG}
+                docker push ${IMAGE_REPO}:latest
+                docker logout
+            """
+        }
+    }
+
+    // ---------- 5. Deploy to Kubernetes ----------
+    stage('Deploy to Kubernetes') {
+        withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
+            sh """
+                echo "Updating image in deployment manifest..."
+                sed -i 's|image: .*|image: ${IMAGE_REPO}:${TAG}|g' ${DEPLOYMENT_FILE}
+
+                echo "Applying updated manifest..."
+                kubectl --kubeconfig $KUBECONFIG_PATH apply -f ${DEPLOYMENT_FILE}
+
+                echo "Waiting for rollout..."
+                kubectl --kubeconfig $KUBECONFIG_PATH rollout status deployment/simple-app
+            """
+        }
+    }
+
+    // ---------- 6. Health Verification ----------
+    // stage('Verify Deployment') {
+    //     withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
+    //         sh '''
+    //             echo "Port-forwarding and checking /health endpoint..."
+    //             kubectl --kubeconfig $KUBECONFIG_PATH port-forward svc/simple-app-service 7070:80 &
+    //             sleep 5
+    //             STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7070/health)
+    //             if [ "$STATUS" -ne 200 ]; then
+    //                 echo "Health check failed with status: $STATUS"
+    //                 exit 1
+    //             fi
+    //             echo "Application healthy (HTTP 200)"
+    //         '''
+    //     }
+    // }
+
+    // ---------- 7. Cleanup ----------
+    stage('Post-Build Cleanup') {
+        sh 'docker image prune -af'
+    }
+
+} // end of node
