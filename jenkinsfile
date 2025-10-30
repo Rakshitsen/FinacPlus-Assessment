@@ -13,7 +13,18 @@ node {
     """
   }
 
-  stage('Test') {
+
+
+  stage('Push') {
+    withCredentials([usernamePassword(credentialsId: 'DOCKERHUB_CREDENTIALS', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+      sh """
+        echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
+        docker push ${image}:${tag}
+        docker push ${image}:latest
+      """
+    }
+  }
+    stage('Test') {
     sh "docker pull ${image}:${tag}"
     sh "docker rm -f ${testContainer} || true"
     sh "docker run -d --name ${testContainer} -p 5000:5000 ${image}:${tag}"
@@ -36,16 +47,6 @@ BUILD_URL: ${BUILD_URL}
 EOF
     """
     archiveArtifacts artifacts: 'deploy-info-*.txt', fingerprint: true, followSymlinks: false
-  }
-
-  stage('Push') {
-    withCredentials([usernamePassword(credentialsId: 'DOCKERHUB_CREDENTIALS', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
-      sh """
-        echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
-        docker push ${image}:${tag}
-        docker push ${image}:latest
-      """
-    }
   }
 
   stage('Deploy') {
