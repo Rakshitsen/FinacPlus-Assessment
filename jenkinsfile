@@ -1,29 +1,51 @@
-pipeline {
-  agent any
+// pipeline {
+//   agent any
 
-  stages {
+//   stages {
+//     stage('Build') {
+//       steps {
+//         sh 'docker --version'
+//       }
+//     }
+
+//     stage('Test') {
+//       steps {
+//         sh 'kubectl version --client'
+//       }
+//     }
+
+//     stage('Deploy') {
+//       steps {
+//         withCredentials([file(credentialsId: 'KUBECONFIG_FILE', variable: 'KUBECONFIG')]) {
+//           // kubectl will read the file path from $KUBECONFIG
+//           sh '''
+//             kubectl config current-context
+//             kubectl get nodes
+//           '''
+//         }
+//       }
+//     }
+//   }
+// }
+
+
+
+node{
     stage('Build') {
-      steps {
         sh 'docker --version'
-      }
     }
 
     stage('Test') {
-      steps {
         sh 'kubectl version --client'
-      }
     }
 
     stage('Deploy') {
-      steps {
         withCredentials([file(credentialsId: 'KUBECONFIG_FILE', variable: 'KUBECONFIG')]) {
-          // kubectl will read the file path from $KUBECONFIG
-          sh '''
-            kubectl config current-context
-            kubectl get nodes
-          '''
+            // kubectl will read the file path from $KUBECONFIG
+            sh '''
+                kubectl config current-context
+                kubectl get nodes
+            '''
         }
-      }
     }
-  }
 }
