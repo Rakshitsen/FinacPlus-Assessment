@@ -1,42 +1,41 @@
-// pipeline {
-//   agent any
+node {
+    // Define Groovy variables
+    def dockerImage = 'simple-app'
+    def userName = 'rakshitsen'
+    def registry = 'docker.io'
+    def branchName = env.BRANCH_NAME ?: 'main'
+    def tag = env.BUILD_NUMBER ?: 'latest'
+    // Full image name (e.g., docker.io/rakshitsen/simple-app)
+    def image = "${registry}/${userName}/${dockerImage}"
+    def testContainer = 'test-container'
 
-//   stages {
-//     stage('Build') {
-//       steps {
-//         sh 'docker --version'
-//       }
-//     }
-
-//     stage('Test') {
-//       steps {
-//         sh 'kubectl version --client'
-//       }
-//     }
-
-//     stage('Deploy') {
-//       steps {
-//         withCredentials([file(credentialsId: 'KUBECONFIG_FILE', variable: 'KUBECONFIG')]) {
-//           // kubectl will read the file path from $KUBECONFIG
-//           sh '''
-//             kubectl config current-context
-//             kubectl get nodes
-//           '''
-//         }
-//       }
-//     }
-//   }
-// }
-
-
-
-node{
     stage('Build') {
-        sh 'docker --version'
+        sh "docker build -t ${image}:${tag} -t ${image}:latest app/."
     }
 
     stage('Test') {
-        sh 'kubectl version --client'
+        // Pull the image (though already built, this ensures consistency)
+        sh "docker pull ${image}:${tag}"
+
+        // Remove previous container if it exists
+        sh "docker rm -f ${testContainer} || true"
+
+        // Fix the typo '--rmp' to '-p' and use Groovy variables
+        sh "docker run -d --name ${testContainer} -p 5000:5000 ${image}:${tag}"
+
+        // Create deployment info artifact. Groovy variables are interpolated for IMAGE:TAG,
+        // while Jenkins environment variables (like $BUILD_NUMBER, $GIT_COMMIT) are used directly.
+        sh '''
+            cat > deploy-info-$BUILD_NUMBER.txt <<EOF
+BUILD_NUMBER: $BUILD_NUMBER
+IMAGE: ${image}:${tag}
+GIT_COMMIT: $GIT_COMMIT
+GIT_BRANCH: $GIT_BRANCH
+TIME: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+BUILD_URL: $BUILD_URL
+EOF
+        '''
+        archiveArtifacts artifacts: 'deploy-info-*.txt', fingerprint: true, followSymlinks: false
     }
 
     stage('Deploy') {
