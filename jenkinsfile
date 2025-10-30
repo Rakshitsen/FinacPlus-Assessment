@@ -2,11 +2,11 @@ node {
     // Define Groovy variables
     def dockerImage = 'simple-app'
     def userName = 'rakshitsen'
-    def registry = 'docker.io'
+    // def registry = 'docker.io'
     def branchName = env.BRANCH_NAME ?: 'main'
     def tag = env.BUILD_NUMBER ?: 'latest'
     // Full image name (e.g., docker.io/rakshitsen/simple-app)
-    def image = "${registry}/${userName}/${dockerImage}"
+    def image = "${userName}/${dockerImage}"
     def testContainer = 'test-container'
 
     stage('Build') {
