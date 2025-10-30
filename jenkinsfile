@@ -1,54 +1,59 @@
 node {
-    // Vars
-    def dockerImage = 'simple-app'
-    def userName    = 'rakshitsen'
-    def branchName  = env.BRANCH_NAME ?: 'main'
-    def tag         = env.BUILD_NUMBER ?: 'latest'
-    def image       = "${userName}/${dockerImage}"
-    def testContainer = 'test-container'
-stage('Build') {
-  sh """
-    docker build -t ${image}:${tag} -t ${image}:latest  .
-  """
-}
+  // Vars
+  def dockerImage   = 'simple-app'
+  def userName      = 'rakshitsen'
+  def branchName    = env.BRANCH_NAME ?: 'main'
+  def tag           = env.BUILD_NUMBER ?: 'latest'
+  def image         = "${userName}/${dockerImage}"
+  def testContainer = 'test-container'
 
+  stage('Build') {
+    sh """
+      docker build -t ${image}:${tag} -t ${image}:latest .
+    """
+  }
 
-    stage('Test') {
-        sh "docker pull ${image}:${tag}"
-        sh "docker rm -f ${testContainer} || true"
-        sh "docker run -d --name ${testContainer} -p 5000:5000 ${image}:${tag}"
+  stage('Test') {
+    sh "docker pull ${image}:${tag}"
+    sh "docker rm -f ${testContainer} || true"
+    sh "docker run -d --name ${testContainer} -p 5000:5000 ${image}:${tag}"
 
-        // Write deploy metadata (Groovy vars interpolate here)
-        sh """
-          set -e
-          cat > deploy-info-$BUILD_NUMBER.txt <<EOF
-BUILD_NUMBER: $BUILD_NUMBER
+    // Compute TIME safely
+    script {
+      env.TIME = sh(script: 'date -u +%Y-%m-%dT%H:%M:%SZ', returnStdout: true).trim()
+    }
+
+    // Write deploy metadata
+    sh """
+      set -e
+      cat > deploy-info-${BUILD_NUMBER}.txt <<EOF
+BUILD_NUMBER: ${BUILD_NUMBER}
 IMAGE: ${image}:${tag}
-GIT_COMMIT: $GIT_COMMIT
-GIT_BRANCH: $GIT_BRANCH
-TIME: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
-BUILD_URL: $BUILD_URL
+GIT_COMMIT: ${GIT_COMMIT}
+GIT_BRANCH: ${GIT_BRANCH}
+TIME: ${env.TIME}
+BUILD_URL: ${BUILD_URL}
 EOF
-        """
-        archiveArtifacts artifacts: 'deploy-info-*.txt', fingerprint: true, followSymlinks: false
-    }
+    """
+    archiveArtifacts artifacts: 'deploy-info-*.txt', fingerprint: true, followSymlinks: false
+  }
 
-    stage('Push') {
-        withCredentials([usernamePassword(credentialsId: 'DOCKERHUB_CREDENTIALS', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
-            sh """
-              echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
-              docker push ${image}:${tag}
-              docker push ${image}:latest
-            """
-        }
+  stage('Push') {
+    withCredentials([usernamePassword(credentialsId: 'DOCKERHUB_CREDENTIALS', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+      sh """
+        echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
+        docker push ${image}:${tag}
+        docker push ${image}:latest
+      """
     }
+  }
 
-    stage('Deploy') {
-        withCredentials([file(credentialsId: 'KUBECONFIG_FILE', variable: 'KUBECONFIG')]) {
-            sh """
-              kubectl config current-context
-              kubectl get nodes
-            """
-        }
+  stage('Deploy') {
+    withCredentials([file(credentialsId: 'KUBECONFIG_FILE', variable: 'KUBECONFIG')]) {
+      sh """
+        kubectl config current-context
+        kubectl get nodes
+      """
     }
+  }
 }
