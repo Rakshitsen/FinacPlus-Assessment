@@ -1,35 +1,30 @@
 node {
-    // Define Groovy variables
+    // Vars
     def dockerImage = 'simple-app'
-    def userName = 'rakshitsen'
-    // def registry = 'docker.io'
-    def branchName = env.BRANCH_NAME ?: 'main'
-    def tag = env.BUILD_NUMBER ?: 'latest'
-    // Full image name (e.g., docker.io/rakshitsen/simple-app)
-    def image = "${userName}/${dockerImage}"
+    def userName    = 'rakshitsen'
+    def branchName  = env.BRANCH_NAME ?: 'main'
+    def tag         = env.BUILD_NUMBER ?: 'latest'
+    def image       = "${userName}/${dockerImage}"
     def testContainer = 'test-container'
+stage('Build') {
+  sh """
+    set -euo pipefail
+    pwd; ls -la
+    test -f app/Dockerfile || { echo 'app/Dockerfile missing'; exit 1; }
+    docker build -t ${image}:${tag} -t ${image}:latest -f app/Dockerfile .
+  """
+}
 
-    stage('Build') {
-        sh '''
-        cd app
-        docker build -t ${image}:${tag} -t ${image}:latest app/.
-        '''
-    }
 
     stage('Test') {
-        // Pull the image (though already built, this ensures consistency)
         sh "docker pull ${image}:${tag}"
-
-        // Remove previous container if it exists
         sh "docker rm -f ${testContainer} || true"
-
-        // Fix the typo '--rmp' to '-p' and use Groovy variables
         sh "docker run -d --name ${testContainer} -p 5000:5000 ${image}:${tag}"
 
-        // Create deployment info artifact. Groovy variables are interpolated for IMAGE:TAG,
-        // while Jenkins environment variables (like $BUILD_NUMBER, $GIT_COMMIT) are used directly.
-        sh '''
-            cat > deploy-info-$BUILD_NUMBER.txt <<EOF
+        // Write deploy metadata (Groovy vars interpolate here)
+        sh """
+          set -e
+          cat > deploy-info-$BUILD_NUMBER.txt <<EOF
 BUILD_NUMBER: $BUILD_NUMBER
 IMAGE: ${image}:${tag}
 GIT_COMMIT: $GIT_COMMIT
@@ -37,25 +32,26 @@ GIT_BRANCH: $GIT_BRANCH
 TIME: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 BUILD_URL: $BUILD_URL
 EOF
-        '''
+        """
         archiveArtifacts artifacts: 'deploy-info-*.txt', fingerprint: true, followSymlinks: false
     }
+
     stage('Push') {
         withCredentials([usernamePassword(credentialsId: 'DOCKERHUB_CREDENTIALS', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
-            // Login to Docker Hub
-            sh "echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin"
-            sh "docker push ${image}:${tag}"
-            sh "docker push ${image}:latest"
+            sh """
+              echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
+              docker push ${image}:${tag}
+              docker push ${image}:latest
+            """
         }
-       
     }
+
     stage('Deploy') {
         withCredentials([file(credentialsId: 'KUBECONFIG_FILE', variable: 'KUBECONFIG')]) {
-            // kubectl will read the file path from $KUBECONFIG
-            sh '''
-                kubectl config current-context
-                kubectl get nodes
-            '''
+            sh """
+              kubectl config current-context
+              kubectl get nodes
+            """
         }
     }
 }
