@@ -9,7 +9,7 @@ node {
 
   stage('Build') {
     sh """
-      docker build -t ${image}:${tag} -t ${image}:latest .
+      docker build -t ${image}:${tag} .
     """
   }
 
@@ -20,7 +20,6 @@ node {
       sh """
         echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
         docker push ${image}:${tag}
-        docker push ${image}:latest
       """
     }
   }
