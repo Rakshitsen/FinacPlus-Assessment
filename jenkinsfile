@@ -8,10 +8,7 @@ node {
     def testContainer = 'test-container'
 stage('Build') {
   sh """
-    set -euo pipefail
-    pwd; ls -la
-    test -f app/Dockerfile || { echo 'app/Dockerfile missing'; exit 1; }
-    docker build -t ${image}:${tag} -t ${image}:latest -f app/Dockerfile .
+    docker build -t ${image}:${tag} -t ${image}:latest  .
   """
 }
 
