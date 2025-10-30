@@ -10,7 +10,10 @@ node {
     def testContainer = 'test-container'
 
     stage('Build') {
-        sh "docker build -t ${image}:${tag} -t ${image}:latest app/."
+        sh '''
+        cd app
+        docker build -t ${image}:${tag} -t ${image}:latest app/.
+        '''
     }
 
     stage('Test') {
