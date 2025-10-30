@@ -40,7 +40,15 @@ EOF
         '''
         archiveArtifacts artifacts: 'deploy-info-*.txt', fingerprint: true, followSymlinks: false
     }
-
+    stage('Push') {
+        withCredentials([usernamePassword(credentialsId: 'DOCKERHUB_CREDENTIALS', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+            // Login to Docker Hub
+            sh "echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin"
+            sh "docker push ${image}:${tag}"
+            sh "docker push ${image}:latest"
+        }
+       
+    }
     stage('Deploy') {
         withCredentials([file(credentialsId: 'KUBECONFIG_FILE', variable: 'KUBECONFIG')]) {
             // kubectl will read the file path from $KUBECONFIG
