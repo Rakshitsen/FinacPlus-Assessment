@@ -16,7 +16,7 @@ node {
 
 
   stage('Push') {
-    withCredentials([usernamePassword(credentialsId: 'DOCKERHUB_CREDENTIALS', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+    withCredentials([usernamePassword(credentialsId: 'Docker_cred', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
       sh """
         echo \$DOCKER_PASSWORD | docker login -u \$DOCKER_USERNAME --password-stdin
         docker push ${image}:${tag}
