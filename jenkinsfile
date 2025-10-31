@@ -35,7 +35,7 @@ node {
 
     // ---------- 4. Push to Docker Hub ----------
     stage('Push Image to Registry') {
-    withCredentials([usernamePassword(credentialsId: 'REGISTRY_CREDS', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+    withCredentials([usernamePassword(credentialsId: REGISTRY_CREDS, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
         withEnv(["DOCKER_CONFIG=${env.WORKSPACE}/.docker-tmp"]) {
         sh '''#!/usr/bin/env bash
     set -euo pipefail
