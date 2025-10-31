@@ -8,7 +8,7 @@ node {
     def TAG = "${BUILD_NUMBER}"
     def REGISTRY_CREDS = "Docker_cred"
     def KUBECONFIG = "KUBECONFIG_FILE"
-    def DEPLOYMENT_FILE = "k8s/deployment.yaml"
+    def DEPLOYMENT_FILE = "k8s/deployment.yml"
 
     stage('Checkout Source') {
         // Pull latest code from main branch
