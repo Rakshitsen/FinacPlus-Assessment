@@ -91,19 +91,7 @@ stage('Deploy to Kubernetes') {
     // ---------- 7. Cleanup ----------
     stage('Post-Build Cleanup') {
     sh "docker rmi ${IMAGE_REPO}:${TAG} || true"
-    }
-    
-    post {
-        always {
-            echo "Cleaning workspace..."
-            cleanWs()
-        }
-        success {
-            echo "Pipeline completed successfully!"
-        }
-        failure {
-            echo "Pipeline failed. Check logs above."
-        }
+    cleanWs()
     }
 
 
