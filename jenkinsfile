@@ -51,20 +51,27 @@ node {
         }
     }
     // ---------- 5. Deploy to Kubernetes ----------
-    stage('Deploy to Kubernetes') {
-        withCredentials([file(credentialsId: KUBECONFIG_FILE,  variable: 'KUBECONFIG_PATH')]) {
-            sh """
-                echo "Updating image in deployment manifest..."
-                sed -i 's|image: .*|image: ${IMAGE_REPO}:${TAG}|g' ${DEPLOYMENT_FILE}
+stage('Deploy to Kubernetes') {
+    withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
+        sh """
+            # echo "Updating image in deployment manifest..."
+            # sed -i 's|image: .*|image: ${IMAGE_REPO}:${TAG}|g' ${DEPLOYMENT_FILE}
+            
+            # echo "Applying updated manifest..."
+            # kubectl --kubeconfig $KUBECONFIG_PATH apply -f ${DEPLOYMENT_FILE}
+            
+            echo "Updating deployment image..."
+            kubectl --kubeconfig $KUBECONFIG_PATH set image deployment/simple-app simple-app=${IMAGE_REPO}:${TAG}
 
-                echo "Applying updated manifest..."
-                kubectl --kubeconfig $KUBECONFIG_PATH apply -f ${DEPLOYMENT_FILE}
+            echo "Waiting for rollout..."
+            kubectl --kubeconfig "$KUBECONFIG_PATH" rollout status deployment/simple-app
 
-                echo "Waiting for rollout..."
-                kubectl --kubeconfig $KUBECONFIG_PATH rollout status deployment/simple-app
-            """
-        }
+            echo "Show rollout history..."
+            kubectl --kubeconfig "$KUBECONFIG_PATH" rollout history deployment/simple-app
+        """
     }
+}
+
 
     // ---------- 6. Health Verification ----------
     stage('Verify Deployment') {
