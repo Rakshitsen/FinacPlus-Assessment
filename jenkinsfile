@@ -7,7 +7,7 @@ node {
     def IMAGE_REPO = "rakshitsen/simple-app"
     def TAG = "${BUILD_NUMBER}"
     def REGISTRY_CREDS = "Docker_cred"
-    def KUBECONFIG = "KUBECONFIG_FILE"
+    def KUBECONFIG_FILE = "KUBECONFIG_FILE"
     def DEPLOYMENT_FILE = "k8s/deployment.yml"
 
     stage('Checkout Source') {
@@ -48,7 +48,7 @@ node {
 
     // ---------- 5. Deploy to Kubernetes ----------
     stage('Deploy to Kubernetes') {
-        withCredentials([file(credentialsId: KUBECONFIG,  variable: 'KUBECONFIG_PATH')]) {
+        withCredentials([file(credentialsId: KUBECONFIG_FILE,  variable: 'KUBECONFIG_PATH')]) {
             sh """
                 echo "Updating image in deployment manifest..."
                 sed -i 's|image: .*|image: ${IMAGE_REPO}:${TAG}|g' ${DEPLOYMENT_FILE}
@@ -67,7 +67,7 @@ node {
         withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
             sh '''
                 echo "Port-forwarding and checking /health endpoint..."
-                kubectl --kubeconfig $KUBECONFIG_FILE port-forward svc/simple-app-service 7070:80 &
+                kubectl --kubeconfig $KUBECONFIG_PATH port-forward svc/simple-app-service 7070:80 &
                 sleep 5
                 STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7070/health)
                 if [ "$STATUS" -ne 200 ]; then
