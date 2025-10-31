@@ -60,7 +60,7 @@ stage('Deploy to Kubernetes') {
                 kubectl --kubeconfig $KUBECONFIG_PATH set image deployment/simple-app simple-app=${IMAGE_REPO}:${TAG}
             else
                 echo "No deployment found — creating new resources"
-                kubectl --kubeconfig $KUBECONFIG_PATH apply -f k8s/deployment.yml
+                kubectl --kubeconfig $KUBECONFIG_PATH apply -f "\$DEPLOYMENT_FILE"
             fi
 
             echo "Waiting for rollout..."
