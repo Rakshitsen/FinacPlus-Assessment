@@ -70,7 +70,6 @@ stage('Deploy to Kubernetes') {
     }
 }
 
-
     // ---------- 6. Health Verification ----------
     stage('Verify Deployment') {
         withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
@@ -85,30 +84,6 @@ stage('Deploy to Kubernetes') {
                 fi
                 echo "Application healthy (HTTP 200)"
             '''
-        }
-    }
-
-
-    stage('Deploy to Kubernetes') {
-        try {
-            withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
-                sh """
-                    # echo "Updating image in deployment manifest..."
-                    # sed -i 's|image: .*|image: ${IMAGE_REPO}:${TAG}|g' ${DEPLOYMENT_FILE}
-                    # echo "Applying updated manifest..."
-                    # kubectl --kubeconfig \$KUBECONFIG_PATH apply -f ${DEPLOYMENT_FILE}
-                    echo "Updating deployment image..."
-                    kubectl --kubeconfig \$KUBECONFIG_PATH set image deployment/simple-app simple-app=${IMAGE_REPO}:${TAG}
-                    echo "Waiting for rollout..."
-                    kubectl --kubeconfig "\$KUBECONFIG_PATH" rollout status deployment/simple-app
-                    echo "Show rollout history..."
-                    kubectl --kubeconfig "\$KUBECONFIG_PATH" rollout history deployment/simple-app
-                """
-            }
-        } catch (Exception e) {
-            echo "Deployment failed: ${e.message}"
-            currentBuild.result = 'FAILURE'
-            error("Kubernetes deployment failed")
         }
     }
 
