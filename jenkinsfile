@@ -48,7 +48,7 @@ node {
 
     // ---------- 5. Deploy to Kubernetes ----------
     stage('Deploy to Kubernetes') {
-        withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
+        withCredentials([file(credentialsId: KUBECONFIG,  variable: 'KUBECONFIG_PATH')]) {
             sh """
                 echo "Updating image in deployment manifest..."
                 sed -i 's|image: .*|image: ${IMAGE_REPO}:${TAG}|g' ${DEPLOYMENT_FILE}
