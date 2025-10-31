@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: simple-app
-        image: rakshitsen/simple-app:v2
+        image: rakshitsen/simple-app:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 5000
