@@ -53,19 +53,19 @@ node {
     // ---------- 5. Deploy to Kubernetes ----------
 stage('Deploy to Kubernetes') {
     withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
-        sh '''
+        sh """
             echo "Updating deployment image..."
             if kubectl --kubeconfig $KUBECONFIG_PATH get deployment simple-app >/dev/null 2>&1; then
                 echo "Deployment exists — updating image"
                 kubectl --kubeconfig $KUBECONFIG_PATH set image deployment/simple-app simple-app=${IMAGE_REPO}:${TAG}
             else
                 echo "No deployment found — creating new resources"
-                kubectl --kubeconfig $KUBECONFIG_PATH apply -f "\$DEPLOYMENT_FILE"
+                kubectl --kubeconfig $KUBECONFIG_PATH apply -f $DEPLOYMENT_FILE
             fi
 
             echo "Waiting for rollout..."
             kubectl --kubeconfig $KUBECONFIG_PATH rollout status deployment/simple-app
-'''
+"""
 
     }
 }
