@@ -35,25 +35,25 @@ node {
 
     // ---------- 4. Push to Docker Hub ----------
     stage('Push Image to Registry') {
-        withCredentials([usernamePassword(credentialsId: REGISTRY_CREDS, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-            sh """
-                echo "Logging in to Docker Hub..."
-                echo $DOCKER_CONFIG
-                echo $PASS | docker login -u $USER --password-stdin
-                docker push ${IMAGE_REPO}:${TAG}
-                docker push ${IMAGE_REPO}:latest
-                docker logout
-            """
+    withCredentials([usernamePassword(credentialsId: 'REGISTRY_CREDS', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+        withEnv(["DOCKER_CONFIG=${env.WORKSPACE}/.docker-tmp"]) {
+        sh '''#!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "$DOCKER_CONFIG"
+
+    printf "%s" "$PASS" | docker login -u "$USER" --password-stdin
+
+    docker push "${IMAGE_REPO}:${TAG}"
+    docker tag "${IMAGE_REPO}:${TAG}" "${IMAGE_REPO}:latest"
+    docker push "${IMAGE_REPO}:latest"
+
+    docker logout || true
+    rm -rf "$DOCKER_CONFIG"
+    '''
         }
     }
-    // stage('Push Image to Registry') {
-    // docker.withRegistry('https://index.docker.io/v1/', REGISTRY_CREDS) {
-    //     sh """
-    //         docker push ${IMAGE_REPO}:${TAG}
-    //         docker push ${IMAGE_REPO}:latest
-    //     """
-    //         }
-    //     }
+    }
+
     // ---------- 5. Deploy to Kubernetes ----------
     stage('Deploy to Kubernetes') {
         withCredentials([file(credentialsId: KUBECONFIG_FILE,  variable: 'KUBECONFIG_PATH')]) {
