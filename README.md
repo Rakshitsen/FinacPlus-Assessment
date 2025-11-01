@@ -47,7 +47,6 @@ Git → Jenkins → Docker Hub → Kubernetes (dev → stage → prod)
 ## 🛡️ Security & Compliance
 
 - **Trivy Scan:** Detects vulnerabilities in Docker images before pushing.
-- **RBAC-ready:** Jenkins uses Kubernetes credentials via Jenkins Credentials Manager.
 - **Immutable Images:** Each build produces a unique, traceable image tag.
 - **Rollback Support:** Deploy any previous image tag safely.
 
