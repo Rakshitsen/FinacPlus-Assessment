@@ -48,19 +48,14 @@ node {
             }
 stage('Security Scan') {
   sh """
-    echo "Updating Trivy DB (cached under ~/.cache)..."
-    trivy image --download-db-only || true
-
     echo "Running vulnerability scan on ${IMAGE_REPO}:${TAG}..."
-    trivy image \
-      --severity CRITICAL,HIGH \
+    trivy image --severity CRITICAL,HIGH \
       --ignore-unfixed \
       --format table \
       --output trivy-report-${BUILD_NUMBER}.txt \
-      ${IMAGE_REPO}:${TAG} || true
-
+      --input ${IMAGE_REPO}:${TAG}
   """
-  archiveArtifacts artifacts: 'trivy-report-*.txt', fingerprint: true
+  archiveArtifacts artifacts: 'trivy-report-*.txt', allowEmptyArchive: true, fingerprint: true
 }
 
 
