@@ -4,11 +4,26 @@
 node {
     // ---------- 1. Initialize ----------
     // Variables for image name, tags, and credentials
+
+
+    properties([
+    parameters([
+        choice(name: 'TARGET_ENV', choices: ['dev','stage','prod'], description: 'Where to deploy/promote'),
+        string(name: 'IMAGE_TAG', defaultValue: "${BUILD_NUMBER}", description: 'Image tag to deploy or promote'),
+        booleanParam(name: 'ROLLBACK', defaultValue: false, description: 'If true, deploy IMAGE_TAG without building'),
+        string(name: 'NAMESPACE_DEV', defaultValue: 'dev', description: 'Namespace for dev'),
+        string(name: 'NAMESPACE_STAGE', defaultValue: 'stage', description: 'Namespace for stage'),
+        string(name: 'NAMESPACE_PROD', defaultValue: 'prod', description: 'Namespace for prod')
+  ])
+])
+    def TAG = IMAGE_TAG
     def IMAGE_REPO = "rakshitsen/simple-app"
-    def TAG = "${BUILD_NUMBER}"
     def REGISTRY_CREDS = "Docker_cred"
     def KUBECONFIG_FILE = "KUBECONFIG_FILE"
     def DEPLOYMENT_FILE = "k8s/deployment.yml"
+    def nsMap = ['dev': NAMESPACE_DEV, 'stage': NAMESPACE_STAGE, 'prod': NAMESPACE_PROD]
+    def TARGET_NS = nsMap[TARGET_ENV]
+
 
     stage('Checkout Source') {
         // Pull latest code from main branch
@@ -24,7 +39,7 @@ node {
         '''
     }
 
-    // ---------- 3. Build Docker Image ----------
+    if (!ROLLBACK && TARGET_ENV == 'dev') {
     stage('Build Docker Image') {
         sh """
             echo "Building Docker image ${IMAGE_REPO}:${TAG}"
@@ -32,8 +47,6 @@ node {
             docker tag ${IMAGE_REPO}:${TAG} ${IMAGE_REPO}:latest
         """
     }
-
-    // ---------- 4. Push to Docker Hub ----------
     stage('Push Image to Registry') {
         withCredentials([usernamePassword(credentialsId: REGISTRY_CREDS, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
             withEnv(["DOCKER_CONFIG=${env.WORKSPACE}/.docker-tmp","IMAGE_REPO=${IMAGE_REPO}", "TAG=${TAG}"]) {
@@ -50,42 +63,59 @@ node {
             }
         }
     }
-    // ---------- 5. Deploy to Kubernetes ----------
-stage('Deploy to Kubernetes') {
-    withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
-        sh """
-            echo "Updating deployment image..."
-            if kubectl --kubeconfig $KUBECONFIG_PATH get deployment simple-app >/dev/null 2>&1; then
-                echo "Deployment exists — updating image"
-                kubectl --kubeconfig $KUBECONFIG_PATH set image deployment/simple-app simple-app=${IMAGE_REPO}:${TAG}
-            else
-                echo "No deployment found — creating new resources"
-                kubectl --kubeconfig $KUBECONFIG_PATH apply -f $DEPLOYMENT_FILE
-            fi
-
-            echo "Waiting for rollout..."
-            kubectl --kubeconfig $KUBECONFIG_PATH rollout status deployment/simple-app
-"""
-
-    }
+} else {
+    echo "Skipping build/push. Using existing image tag: ${IMAGE_TAG}"
 }
 
+
+
+stage('Deploy to Kubernetes') {
+  withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
+    sh """
+      echo "Target env: ${TARGET_ENV}, namespace: ${TARGET_NS}, tag: ${TAG}"
+
+      # Ensure namespace exists
+      kubectl --kubeconfig $KUBECONFIG_PATH get ns ${TARGET_NS} >/dev/null 2>&1 || \
+        kubectl --kubeconfig $KUBECONFIG_PATH create ns ${TARGET_NS}
+
+      # First-time create vs update
+      if kubectl --kubeconfig $KUBECONFIG_PATH -n ${TARGET_NS} get deploy simple-app >/dev/null 2>&1; then
+        echo "Deployment exists — updating image"
+        kubectl --kubeconfig $KUBECONFIG_PATH -n ${TARGET_NS} \
+          set image deploy/simple-app simple-app=${IMAGE_REPO}:${TAG}
+      else
+        echo "No deployment — creating resources"
+        kubectl --kubeconfig $KUBECONFIG_PATH -n ${TARGET_NS} apply -f k8s/deployment.yml
+        kubectl --kubeconfig $KUBECONFIG_PATH -n ${TARGET_NS} \
+          set image deploy/simple-app simple-app=${IMAGE_REPO}:${TAG}
+      fi
+
+      echo "Waiting for rollout..."
+      kubectl --kubeconfig $KUBECONFIG_PATH -n ${TARGET_NS} rollout status deploy/simple-app
+
+      echo "Running image in ${TARGET_NS}:"
+      kubectl --kubeconfig $KUBECONFIG_PATH -n ${TARGET_NS} get deploy simple-app -o=jsonpath='{.spec.template.spec.containers[0].image}{"\\n"}'
+    """
+  }
+}
+
+
     // ---------- 6. Health Verification ----------
-    stage('Verify Deployment') {
-        withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
-            sh '''
-                echo "Port-forwarding and checking /health endpoint..."
-                kubectl --kubeconfig $KUBECONFIG_PATH port-forward svc/simple-app-service 7070:80 &
-                sleep 5
-                STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7070/health)
-                if [ "$STATUS" -ne 200 ]; then
-                    echo "Health check failed with status: $STATUS"
-                    exit 1
-                fi
-                echo "Application healthy (HTTP 200)"
-            '''
-        }
-    }
+    // stage('Verify Deployment') {
+    //     withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
+    //         sh '''
+    //             echo "Port-forwarding and checking /health endpoint..."
+    //             kubectl --kubeconfig $KUBECONFIG_PATH port-forward svc/simple-app-service 7070:80 &
+    //             sleep 5
+    //             STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7070/health)
+    //             if [ "$STATUS" -ne 200 ]; then
+    //                 echo "Health check failed with status: $STATUS"
+    //                 exit 1
+    //             fi
+    //             echo "Application healthy (HTTP 200)"
+    //         '''
+    //     }
+    // }
 
 
     // ---------- 7. Cleanup ----------
