@@ -157,7 +157,7 @@ EOF
             build job: env.JOB_NAME, parameters: [
                 string(name: 'TARGET_ENV', value: 'stage'),
                 string(name: 'IMAGE_TAG', value: TAG),
-                booleanParam(name: 'ROLLBACK', value: true),
+                booleanParam(name: 'ROLLBACK', value: false),
                 string(name: 'NAMESPACE_DEV', value: params.NAMESPACE_DEV),
                 string(name: 'NAMESPACE_STAGE', value: params.NAMESPACE_STAGE),
                 string(name: 'NAMESPACE_PROD', value: params.NAMESPACE_PROD)
