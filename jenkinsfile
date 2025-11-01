@@ -59,7 +59,7 @@ node {
                         --severity HIGH,CRITICAL \
                         --ignore-unfixed \
                         --format table \
-                        --output trivy-report-${TAG}.txt \
+                        --output "/out/trivy-report-$TAG.txt" \
                         ${IMAGE_REPO}:${TAG} || true
                 """
 
