@@ -46,25 +46,22 @@ node {
                     docker tag ${IMAGE_REPO}:${TAG} ${IMAGE_REPO}:latest
                 """
             }
-//         stage('Security Scan (Trivy)') {
-//                 sh """
-//                     echo "Running Trivy vulnerability scan on ${IMAGE_REPO}:${TAG} ..."
-//                 """
+stage('Security Scan') {
+  sh """
+    echo "Updating Trivy DB (cached under ~/.cache)..."
+    trivy image --download-db-only || true
 
-//                 sh """
-//                     docker run --rm \
-//                         -v /var/run/docker.sock:/var/run/docker.sock \
-//                         -v ${env.WORKSPACE}/trivy-cache:/root/.cache/ \
-//                         aquasec/trivy:latest image \
-//                         --severity HIGH,CRITICAL \
-//                         --ignore-unfixed \
-//                         --format table \
-//                         --output "/out/trivy-report-$TAG.txt" \
-//                         ${IMAGE_REPO}:${TAG} || true
-//                 """
+    echo "Running vulnerability scan on ${IMAGE_REPO}:${TAG}..."
+    trivy image \
+      --severity CRITICAL,HIGH \
+      --ignore-unfixed \
+      --format table \
+      --output trivy-report-${BUILD_NUMBER}.txt \
+      ${IMAGE_REPO}:${TAG} || true
 
-//                 archiveArtifacts artifacts: "trivy-report-*.txt", fingerprint: true
-// }
+  """
+  archiveArtifacts artifacts: 'trivy-report-*.txt', fingerprint: true
+}
 
 
 
