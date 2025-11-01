@@ -106,7 +106,7 @@ stage('Deploy to Kubernetes') {
     withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
         sh """
         echo "Checking /health endpoint..."
-        kubectl --kubeconfig $KUBECONFIG_PATH -n ${TARGET_NS} port-forward svc/simple-app-service 7070:80 &
+        kubectl --kubeconfig $KUBECONFIG_PATH port-forward svc/simple-app-service 7070:80 -n ${TARGET_NS}  &
         PF_PID=$!
         sleep 5
         STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7070/health)
