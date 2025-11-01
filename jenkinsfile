@@ -16,13 +16,15 @@ node {
         string(name: 'NAMESPACE_PROD', defaultValue: 'prod', description: 'Namespace for prod')
   ])
 ])
-    def TAG = IMAGE_TAG
+    def TAG = params.IMAGE_TAG
     def IMAGE_REPO = "rakshitsen/simple-app"
     def REGISTRY_CREDS = "Docker_cred"
     def KUBECONFIG_FILE = "KUBECONFIG_FILE"
     def DEPLOYMENT_FILE = "k8s/deployment.yml"
-    def nsMap = ['dev': NAMESPACE_DEV, 'stage': NAMESPACE_STAGE, 'prod': NAMESPACE_PROD]
-    def TARGET_NS = nsMap[TARGET_ENV]
+    def nsMap = ['dev': params.NAMESPACE_DEV, 'stage': params.NAMESPACE_STAGE, 'prod': params.NAMESPACE_PROD]
+    def TARGET_NS = nsMap[params.TARGET_ENV]
+    def TARGET_ENV = params.TARGET_ENV
+    def ROLLBACK = params.ROLLBACK
 
 
     stage('Checkout Source') {
@@ -39,7 +41,7 @@ node {
         '''
     }
 
-    if (!ROLLBACK && TARGET_ENV == 'dev') {
+   if (!ROLLBACK && TARGET_ENV == 'dev') {
     stage('Build Docker Image') {
         sh """
             echo "Building Docker image ${IMAGE_REPO}:${TAG}"
@@ -64,9 +66,8 @@ node {
         }
     }
 } else {
-    echo "Skipping build/push. Using existing image tag: ${IMAGE_TAG}"
+    echo "Skipping build/push. Using existing image tag: ${TAG}"
 }
-
 
 
 stage('Deploy to Kubernetes') {
