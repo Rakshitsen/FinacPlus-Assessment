@@ -172,7 +172,7 @@ Status:     ${STATUS}
       emailext(
         subject: "[${STATUS}] ${JOB_NAME} #${BUILD_NUMBER} → ${TARGET_ENV}",
         body: """${SUMMARY}Console: ${env.BUILD_URL}console""",
-        to: 'loveha6571@lovleo.com'
+        to: 'rakshitsen1@gmai.com'
       )
     } catch (ignored) {
       echo "Email not sent (plugin not configured)."
