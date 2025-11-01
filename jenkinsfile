@@ -49,8 +49,12 @@ node {
 stage('Security Scan') {
     sh """
         echo "Scanning ${IMAGE_REPO}:${TAG} for vulnerabilities..."
-        trivy image --format table ${IMAGE_REPO}:${TAG} || true
-        trivy image --format json --output trivy-report-${BUILD_NUMBER}.json ${IMAGE_REPO}:${TAG} || true
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \\
+          aquasec/trivy:latest image --format table ${IMAGE_REPO}:${TAG} || true
+        
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \\
+          -v \$(pwd):/output \\
+          aquasec/trivy:latest image --format json --output /output/trivy-report-${BUILD_NUMBER}.json ${IMAGE_REPO}:${TAG} || true
     """
     archiveArtifacts artifacts: 'trivy-report-*.json', fingerprint: true, allowEmptyArchive: true
 }
