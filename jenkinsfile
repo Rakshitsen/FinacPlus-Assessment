@@ -58,9 +58,6 @@ node {
             --format table \
             --output trivy-report-${BUILD_NUMBER}.txt \
             ${IMAGE_REPO}:${TAG} || true
-
-        echo "Top 30 lines of the report:"
-        head -n 30 trivy-report-${BUILD_NUMBER}.txt || true
     """
     archiveArtifacts artifacts: 'trivy-report-*.txt', fingerprint: true
 }
