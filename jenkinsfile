@@ -101,22 +101,22 @@ stage('Deploy to Kubernetes') {
 }
 
 
-    // ---------- 6. Health Verification ----------
-    // stage('Verify Deployment') {
-    //     withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
-    //         sh '''
-    //             echo "Port-forwarding and checking /health endpoint..."
-    //             kubectl --kubeconfig $KUBECONFIG_PATH port-forward svc/simple-app-service 7070:80 &
-    //             sleep 5
-    //             STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7070/health)
-    //             if [ "$STATUS" -ne 200 ]; then
-    //                 echo "Health check failed with status: $STATUS"
-    //                 exit 1
-    //             fi
-    //             echo "Application healthy (HTTP 200)"
-    //         '''
-    //     }
-    // }
+    ---------- 6. Health Verification ----------
+    stage('Verify Deployment') {
+        withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
+            sh '''
+                echo "Port-forwarding and checking /health endpoint..."
+                kubectl --kubeconfig $KUBECONFIG_PATH port-forward svc/simple-app-service 7070:80 &
+                sleep 5
+                STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7070/health)
+                if [ "$STATUS" -ne 200 ]; then
+                    echo "Health check failed with status: $STATUS"
+                    exit 1
+                fi
+                echo "Application healthy (HTTP 200)"
+            '''
+        }
+    }
 
 
     // ---------- 7. Cleanup ----------
