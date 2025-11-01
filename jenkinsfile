@@ -139,7 +139,6 @@ if (TARGET_ENV == 'dev' && !ROLLBACK) {
         // ---------- 7. Cleanup ----------
     stage('Post-Build Cleanup') {
     sh "docker rmi ${IMAGE_REPO}:${TAG} || true"
-    cleanWs()
     }
 
 post {
