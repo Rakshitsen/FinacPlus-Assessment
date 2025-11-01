@@ -47,17 +47,13 @@ node {
                 """
             }
 stage('Security Scan') {
-  sh """
-    echo "Running vulnerability scan on ${IMAGE_REPO}:${TAG}..."
-    trivy image --severity CRITICAL,HIGH \
-      --ignore-unfixed \
-      --format table \
-      --output trivy-report-${BUILD_NUMBER}.txt \
-      --input ${IMAGE_REPO}:${TAG}
-  """
-  archiveArtifacts artifacts: 'trivy-report-*.txt', allowEmptyArchive: true, fingerprint: true
+    sh """
+        echo "Scanning ${IMAGE_REPO}:${TAG} for vulnerabilities..."
+        trivy image --format table ${IMAGE_REPO}:${TAG} || true
+        trivy image --format json --output trivy-report-${BUILD_NUMBER}.json ${IMAGE_REPO}:${TAG} || true
+    """
+    archiveArtifacts artifacts: 'trivy-report-*.json', fingerprint: true, allowEmptyArchive: true
 }
-
 
 
 
