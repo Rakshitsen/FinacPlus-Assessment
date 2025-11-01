@@ -136,14 +136,29 @@ if (TARGET_ENV == 'dev' && !ROLLBACK) {
     ]
 }
 
-        
-
-
-    // ---------- 7. Cleanup ----------
+        // ---------- 7. Cleanup ----------
     stage('Post-Build Cleanup') {
     sh "docker rmi ${IMAGE_REPO}:${TAG} || true"
     cleanWs()
     }
+
+post {
+    success {
+        emailext(
+          subject: "✅ ${JOB_NAME} #${BUILD_NUMBER} succeeded in ${TARGET_ENV}",
+          body: "Image ${IMAGE_REPO}:${TAG} deployed successfully to ${TARGET_ENV}.",
+          to: 'loveha6571@lovleo.com'
+        )
+    }
+    failure {
+        emailext(
+          subject: "❌ ${JOB_NAME} #${BUILD_NUMBER} failed in ${TARGET_ENV}",
+          body: "Check Jenkins logs for details.",
+          to: 'loveha6571@lovleo.com'
+        )
+    }
+}
+
 
 
 } // end of node
