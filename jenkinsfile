@@ -48,23 +48,26 @@ node {
         """
     }
     stage('Push Image to Registry') {
-        withCredentials([usernamePassword(credentialsId: REGISTRY_CREDS, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-            withEnv(["DOCKER_CONFIG=${env.WORKSPACE}/.docker-tmp","IMAGE_REPO=${IMAGE_REPO}", "TAG=${TAG}"]) {
-                sh """#!/usr/bin/env bash
-                    set -euo pipefail
-                    mkdir -p $DOCKER_CONFIG
-                    printf "%s" "\$PASS" | docker login -u "\$USER" --password-stdin
-                    docker push "${IMAGE_REPO}:${TAG}"
-                    docker tag "${IMAGE_REPO}:${TAG}" "${IMAGE_REPO}:latest"
-                    docker push "${IMAGE_REPO}:latest"
-                    docker logout || true
-                    rm -rf $DOCKER_CONFIG
-                """
-            }
+    withCredentials([usernamePassword(credentialsId: REGISTRY_CREDS, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+        withEnv(["DOCKER_CONFIG=${env.WORKSPACE}/.docker-tmp","IMAGE_REPO=${IMAGE_REPO}", "TAG=${TAG}"]) {
+            sh """#!/usr/bin/env bash
+                set -euo pipefail
+                mkdir -p \$DOCKER_CONFIG
+                printf "%s" "\$PASS" | docker login -u "\$USER" --password-stdin
+                docker push "${IMAGE_REPO}:${TAG}"
+                docker tag "${IMAGE_REPO}:${TAG}" "${IMAGE_REPO}:latest"
+                docker push "${IMAGE_REPO}:latest"
+                docker logout || true
+                rm -rf \$DOCKER_CONFIG
+            """
+            sh """
+                cat > deploy-info-${BUILD_NUMBER}.txt <<EOF
+\$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE_REPO}:${TAG}")
+EOF
+            """
+            archiveArtifacts artifacts: 'deploy-info-*.txt', fingerprint: true, followSymlinks: false
         }
     }
-} else {
-    echo "Skipping build/push. Using existing image tag: ${TAG}"
 }
 
 
@@ -136,6 +139,23 @@ if (TARGET_ENV == 'dev' && !ROLLBACK) {
     ]
 }
 
+if (TARGET_ENV == 'stag' && !ROLLBACK) {
+    stage('Approval for Production Deployment') {
+        timeout(time: 10, unit: 'MINUTES') {      // auto-cancel after 10 min
+            input message: "Promote ${IMAGE_REPO}:${TAG} to STAGE?", ok: "Deploy to Production"
+        }
+    }
+
+    echo "Promoting image ${IMAGE_REPO}:${TAG} to Production..."
+    build job: env.JOB_NAME, parameters: [
+        string(name: 'TARGET_ENV', value: 'prod'),
+        string(name: 'IMAGE_TAG', value: TAG),
+        booleanParam(name: 'ROLLBACK', value: true),
+        string(name: 'NAMESPACE_DEV', value: params.NAMESPACE_DEV),
+        string(name: 'NAMESPACE_STAGE', value: params.NAMESPACE_STAGE),
+        string(name: 'NAMESPACE_PROD', value: params.NAMESPACE_PROD)
+    ]
+}
         // ---------- 7. Cleanup ----------
     stage('Post-Build Cleanup') {
     sh "docker rmi ${IMAGE_REPO}:${TAG} || true"
@@ -168,15 +188,15 @@ Status:     ${STATUS}
     }
 
     // Email notifications (requires Email Extension plugin configured)
-    try {
-      emailext(
-        subject: "[${STATUS}] ${JOB_NAME} #${BUILD_NUMBER} → ${TARGET_ENV}",
-        body: """${SUMMARY}Console: ${env.BUILD_URL}console""",
-        to: 'rakshitsen1@gmai.com'
-      )
-    } catch (ignored) {
-      echo "Email not sent (plugin not configured)."
-    }
+    // try {
+    //   emailext(
+    //     subject: "[${STATUS}] ${JOB_NAME} #${BUILD_NUMBER} → ${TARGET_ENV}",
+    //     body: """${SUMMARY}Console: ${env.BUILD_URL}console""",
+    //     to: 'rakshitsen1@gmai.com'
+    //   )
+    // } catch (ignored) {
+    //   echo "Email not sent (plugin not configured)."
+    // }
 
 
   }
