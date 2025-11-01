@@ -47,34 +47,24 @@ node {
                 """
             }
             stage('Scan Image') {
-                steps {
-                    echo 'Docker image scanning stage'
-                    sh '''
-                    set -euo pipefail
+    echo 'Docker image scanning stage'
+    sh '''#!/usr/bin/env bash
+    set -euo pipefail
+    IMAGE="${IMAGE_REPO}:${TAG}"
+    REPORT="trivy-report-${BUILD_NUMBER}.txt"
+    docker run --rm \
+      -v /var/run/docker.sock:/var/run/docker.sock \
+      -v "$PWD":/work -w /work \
+      -v "$HOME/.cache/trivy":/root/.cache/ \
+      aquasec/trivy:0.58.1 image "$IMAGE" \
+      --severity HIGH,CRITICAL \
+      --no-progress \
+      --format table \
+      --output "$REPORT"
+    '''
+    archiveArtifacts artifacts: 'trivy-report-*.txt', fingerprint: true, followSymlinks: false, onlyIfSuccessful: false
+}
 
-                    IMAGE="${IMAGE_REPO}:${TAG}"
-                    REPORT="trivy-report-${BUILD_NUMBER}.txt"
-
-                    # Run Trivy in Docker, write report to workspace
-                    docker run --rm \
-                        -v /var/run/docker.sock:/var/run/docker.sock \
-                        -v "$PWD":/work -w /work \
-                        aquasec/trivy:latest image "$IMAGE" \
-                        --severity HIGH,CRITICAL \
-                        --no-progress \
-                        --format table \
-                        --output "$REPORT" \
-                        || true
-
-                    echo "Top findings summary:"
-                    head -n 50 "$REPORT" || true
-                    '''
-                    archiveArtifacts artifacts: 'trivy-report-*.txt',
-                                    fingerprint: true,
-                                    followSymlinks: false,
-                                    onlyIfSuccessful: false
-                }
-            }
 
             stage('Push Image to Registry') {
                 withCredentials([usernamePassword(credentialsId: REGISTRY_CREDS, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
