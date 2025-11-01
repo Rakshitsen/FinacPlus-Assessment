@@ -102,23 +102,23 @@ stage('Deploy to Kubernetes') {
 
 
     // ---------- 6. Health Verification ----------
-    stage('Verify Deployment') {
+stage('Verify Deployment') {
     withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
-        sh '''
+        sh """
         echo "Checking /health endpoint..."
-        kubectl --kubeconfig $KUBECONFIG_PATH port-forward svc/simple-app-service 7070:80 -n "\${TARGET_NS}"  &
-        PF_PID=$!
+        kubectl --kubeconfig \$KUBECONFIG_PATH port-forward svc/simple-app-service 7070:80 -n ${TARGET_NS} &
+        PF_PID=\$!
         sleep 5
-        STATUS=$(curl -s -o /dev/null -w "\%{http_code}" http://localhost:7070/health)
-        kill $PF_PID || true
-        if [ "$STATUS" -ne 200 ]; then
-            echo "Health check failed ($STATUS)"
+        STATUS=\$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7070/health)
+        kill \$PF_PID || true
+        if [ "\$STATUS" -ne 200 ]; then
+            echo "Health check failed (\$STATUS)"
             exit 1
         fi
         echo "Healthy (HTTP 200)"
-        '''
+        """
     }
-    }
+}
 
 
     // ---------- 7. Cleanup ----------
