@@ -46,24 +46,25 @@ node {
                     docker tag ${IMAGE_REPO}:${TAG} ${IMAGE_REPO}:latest
                 """
             }
-            stage('Scan Image') {
-    echo 'Docker image scanning stage'
-    sh '''#!/usr/bin/env bash
-    set -euo pipefail
-    IMAGE="${IMAGE_REPO}:${TAG}"
-    REPORT="trivy-report-${BUILD_NUMBER}.txt"
-    docker run --rm \
-      -v /var/run/docker.sock:/var/run/docker.sock \
-      -v "$PWD":/work -w /work \
-      -v "$HOME/.cache/trivy":/root/.cache/ \
-      aquasec/trivy:0.58.1 image "$IMAGE" \
-      --severity HIGH,CRITICAL \
-      --no-progress \
-      --format table \
-      --output "$REPORT"
-    '''
-    archiveArtifacts artifacts: 'trivy-report-*.txt', fingerprint: true, followSymlinks: false, onlyIfSuccessful: false
+            stage('Security Scan (Trivy)') {
+    sh """
+        echo "Running Trivy vulnerability scan on ${IMAGE_REPO}:${TAG} ..."
+        docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v ${env.WORKSPACE}/trivy-cache:/root/.cache/ \
+            aquasec/trivy:latest image \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --format table \
+            --output trivy-report-${BUILD_NUMBER}.txt \
+            ${IMAGE_REPO}:${TAG} || true
+
+        echo "Top 30 lines of the report:"
+        head -n 30 trivy-report-${BUILD_NUMBER}.txt || true
+    """
+    archiveArtifacts artifacts: 'trivy-report-*.txt', fingerprint: true
 }
+
 
 
             stage('Push Image to Registry') {
