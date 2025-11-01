@@ -101,7 +101,7 @@ stage('Deploy to Kubernetes') {
 }
 
 
-    ---------- 6. Health Verification ----------
+    // ---------- 6. Health Verification ----------
     stage('Verify Deployment') {
         withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
             sh '''
