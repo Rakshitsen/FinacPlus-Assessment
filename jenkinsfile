@@ -24,7 +24,7 @@ node {
     def TARGET_ENV = params.TARGET_ENV
     def ROLLBACK = params.ROLLBACK
 
-
+    try{
     stage('Checkout Source') {
         // Pull latest code from main branch
         checkout scm
@@ -140,24 +140,44 @@ if (TARGET_ENV == 'dev' && !ROLLBACK) {
     stage('Post-Build Cleanup') {
     sh "docker rmi ${IMAGE_REPO}:${TAG} || true"
     }
-
-post {
-    success {
-        emailext(
-          subject: "✅ ${JOB_NAME} #${BUILD_NUMBER} succeeded in ${TARGET_ENV}",
-          body: "Image ${IMAGE_REPO}:${TAG} deployed successfully to ${TARGET_ENV}.",
-          to: 'loveha6571@lovleo.com'
-        )
     }
-    failure {
-        emailext(
-          subject: "❌ ${JOB_NAME} #${BUILD_NUMBER} failed in ${TARGET_ENV}",
-          body: "Check Jenkins logs for details.",
-          to: 'loveha6571@lovleo.com'
-        )
+finally {
+    // ---------- Notify & Audit (always runs) ----------
+    // Derive status and a few useful facts
+    def STATUS = currentBuild.currentResult ?: 'SUCCESS'
+    def SUMMARY = """
+----------------------------------------
+Deployment Summary
+Env:        ${TARGET_ENV}
+Namespace:  ${TARGET_NS}
+Image:      ${IMAGE_REPO}:${TAG}
+Build #:    ${BUILD_NUMBER}
+Status:     ${STATUS}
+----------------------------------------
+"""
+
+    echo SUMMARY
+
+    // Optional: fetch running image in cluster for proof (ignore errors)
+    withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
+      sh """
+        echo "Cluster image in ${TARGET_NS}:"
+        kubectl --kubeconfig $KUBECONFIG_PATH -n ${TARGET_NS} \
+          get deploy simple-app -o=jsonpath='{.spec.template.spec.containers[0].image}{"\\n"}' || true
+      """
     }
-}
+
+    // Email notifications (requires Email Extension plugin configured)
+    try {
+      emailext(
+        subject: "[${STATUS}] ${JOB_NAME} #${BUILD_NUMBER} → ${TARGET_ENV}",
+        body: """${SUMMARY}Console: ${env.BUILD_URL}console""",
+        to: 'loveha6571@lovleo.com'
+      )
+    } catch (ignored) {
+      echo "Email not sent (plugin not configured)."
+    }
 
 
-
+  }
 } // end of node
