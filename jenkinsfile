@@ -59,7 +59,7 @@ node {
             --output trivy-report-${TAG}.txt \
             ${IMAGE_REPO}:${TAG} || true
     """
-     archiveArtifacts artifacts: "trivy-report-${env.TAG}.txt", fingerprint: true
+     archiveArtifacts artifacts: "trivy-report-${TAG}.txt", fingerprint: true
 }
 
 
