@@ -1,6 +1,5 @@
 // Scripted Pipeline for FinacPlus Assessment
 // CI/CD: Git → Jenkins → Docker Hub → Kubernetes (kind cluster)
-
 node {
     // ---------- 1. Initialize ----------
     properties([
@@ -25,147 +24,151 @@ node {
     def ROLLBACK = params.ROLLBACK
 
     try{
-    stage('Checkout Source') {
-        // Pull latest code from main branch
-        checkout scm
-    }
+        stage('Checkout Source') {
+            // Pull latest code from main branch
+            checkout scm
+        }
 
-    // ---------- 2. Build ----------
-    stage('Build & Test') {
-        sh '''
-            echo "Installing dependencies and running quick tests..."
-            python3 --version
-            docker --version
-        '''
-    }
+        // ---------- 2. Build ----------
+        stage('Build & Test') {
+            sh '''
+                echo "Installing dependencies and running quick tests..."
+                python3 --version
+                docker --version
+            '''
+        }
 
-   if (!ROLLBACK && TARGET_ENV == 'dev') {
-    stage('Build Docker Image') {
-        sh """
-            echo "Building Docker image ${IMAGE_REPO}:${TAG}"
-            docker build -t ${IMAGE_REPO}:${TAG} .
-            docker tag ${IMAGE_REPO}:${TAG} ${IMAGE_REPO}:latest
-        """
-    }
-    stage('Push Image to Registry') {
-    withCredentials([usernamePassword(credentialsId: REGISTRY_CREDS, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-        withEnv(["DOCKER_CONFIG=${env.WORKSPACE}/.docker-tmp","IMAGE_REPO=${IMAGE_REPO}", "TAG=${TAG}"]) {
-            sh """#!/usr/bin/env bash
-                set -euo pipefail
-                mkdir -p \$DOCKER_CONFIG
-                printf "%s" "\$PASS" | docker login -u "\$USER" --password-stdin
-                docker push "${IMAGE_REPO}:${TAG}"
-                docker tag "${IMAGE_REPO}:${TAG}" "${IMAGE_REPO}:latest"
-                docker push "${IMAGE_REPO}:latest"
-                docker logout || true
-                rm -rf \$DOCKER_CONFIG
-            """
-            sh """
-                cat > deploy-info-${BUILD_NUMBER}.txt <<EOF
+       if (!ROLLBACK && TARGET_ENV == 'dev') {
+            stage('Build Docker Image') {
+                sh """
+                    echo "Building Docker image ${IMAGE_REPO}:${TAG}"
+                    docker build -t ${IMAGE_REPO}:${TAG} .
+                    docker tag ${IMAGE_REPO}:${TAG} ${IMAGE_REPO}:latest
+                """
+            }
+            stage('Push Image to Registry') {
+                withCredentials([usernamePassword(credentialsId: REGISTRY_CREDS, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                    withEnv(["DOCKER_CONFIG=${env.WORKSPACE}/.docker-tmp","IMAGE_REPO=${IMAGE_REPO}", "TAG=${TAG}"]) {
+                        sh """#!/usr/bin/env bash
+                            set -euo pipefail
+                            mkdir -p \$DOCKER_CONFIG
+                            printf "%s" "\$PASS" | docker login -u "\$USER" --password-stdin
+                            docker push "${IMAGE_REPO}:${TAG}"
+                            docker tag "${IMAGE_REPO}:${TAG}" "${IMAGE_REPO}:latest"
+                            docker push "${IMAGE_REPO}:latest"
+                            docker logout || true
+                            rm -rf \$DOCKER_CONFIG
+                        """
+                        sh """
+                            cat > deploy-info-${BUILD_NUMBER}.txt <<EOF
 \$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE_REPO}:${TAG}")
 EOF
-            """
-            archiveArtifacts artifacts: 'deploy-info-*.txt', fingerprint: true, followSymlinks: false
+                        """
+                        archiveArtifacts artifacts: 'deploy-info-*.txt', fingerprint: true, followSymlinks: false
+                    }
+                }
+            }
+        } else {
+            echo "Skipping build/push. Using existing image tag: ${TAG}"
         }
-    }
-}
 
 
-stage('Deploy to Kubernetes') {
-  withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
-    sh """
-      echo "Target env: ${TARGET_ENV}, namespace: ${TARGET_NS}, tag: ${TAG}"
+        stage('Deploy to Kubernetes') {
+            withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
+                sh """
+                    echo "Target env: ${TARGET_ENV}, namespace: ${TARGET_NS}, tag: ${TAG}"
 
-      # Ensure namespace exists
-      kubectl --kubeconfig $KUBECONFIG_PATH get ns ${TARGET_NS} >/dev/null 2>&1 || \
-        kubectl --kubeconfig $KUBECONFIG_PATH create ns ${TARGET_NS}
+                    # Ensure namespace exists
+                    kubectl --kubeconfig \$KUBECONFIG_PATH get ns ${TARGET_NS} >/dev/null 2>&1 || \
+                      kubectl --kubeconfig \$KUBECONFIG_PATH create ns ${TARGET_NS}
 
-      # First-time create vs update
-      if kubectl --kubeconfig $KUBECONFIG_PATH -n ${TARGET_NS} get deploy simple-app >/dev/null 2>&1; then
-        echo "Deployment exists — updating image"
-        kubectl --kubeconfig $KUBECONFIG_PATH -n ${TARGET_NS} \
-          set image deploy/simple-app simple-app=${IMAGE_REPO}:${TAG}
-      else
-        echo "No deployment — creating resources"
-        kubectl --kubeconfig $KUBECONFIG_PATH -n ${TARGET_NS} apply -f k8s/deployment.yml
-        kubectl --kubeconfig $KUBECONFIG_PATH -n ${TARGET_NS} \
-          set image deploy/simple-app simple-app=${IMAGE_REPO}:${TAG}
-      fi
+                    # First-time create vs update
+                    if kubectl --kubeconfig \$KUBECONFIG_PATH -n ${TARGET_NS} get deploy simple-app >/dev/null 2>&1; then
+                      echo "Deployment exists — updating image"
+                      kubectl --kubeconfig \$KUBECONFIG_PATH -n ${TARGET_NS} \
+                        set image deploy/simple-app simple-app=${IMAGE_REPO}:${TAG}
+                    else
+                      echo "No deployment — creating resources"
+                      kubectl --kubeconfig \$KUBECONFIG_PATH -n ${TARGET_NS} apply -f k8s/deployment.yml
+                      kubectl --kubeconfig \$KUBECONFIG_PATH -n ${TARGET_NS} \
+                        set image deploy/simple-app simple-app=${IMAGE_REPO}:${TAG}
+                    fi
 
-      echo "Waiting for rollout..."
-      kubectl --kubeconfig $KUBECONFIG_PATH -n ${TARGET_NS} rollout status deploy/simple-app
+                    echo "Waiting for rollout..."
+                    kubectl --kubeconfig \$KUBECONFIG_PATH -n ${TARGET_NS} rollout status deploy/simple-app
 
-      echo "Running image in ${TARGET_NS}:"
-      kubectl --kubeconfig $KUBECONFIG_PATH -n ${TARGET_NS} get deploy simple-app -o=jsonpath='{.spec.template.spec.containers[0].image}{"\\n"}'
-    """
-  }
-}
-
-
-    // ---------- 6. Health Verification ----------
-stage('Verify Deployment') {
-    withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
-        sh """
-        echo "Checking /health endpoint..."
-        kubectl --kubeconfig \$KUBECONFIG_PATH port-forward svc/simple-app-service 7070:80 -n ${TARGET_NS} &
-        PF_PID=\$!
-        sleep 5
-        STATUS=\$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7070/health)
-        kill \$PF_PID || true
-        if [ "\$STATUS" -ne 200 ]; then
-            echo "Health check failed (\$STATUS)"
-            exit 1
-        fi
-        echo "Healthy (HTTP 200)"
-        """
-    }
-}
-
-if (TARGET_ENV == 'dev' && !ROLLBACK) {
-    stage('Approval for Stage Deployment') {
-        timeout(time: 10, unit: 'MINUTES') {      // auto-cancel after 10 min
-            input message: "Promote ${IMAGE_REPO}:${TAG} to STAGE?", ok: "Deploy to Stage"
+                    echo "Running image in ${TARGET_NS}:"
+                    kubectl --kubeconfig \$KUBECONFIG_PATH -n ${TARGET_NS} get deploy simple-app -o=jsonpath='{.spec.template.spec.containers[0].image}{"\\n"}'
+                """
+            }
         }
-    }
 
-    echo "Promoting image ${IMAGE_REPO}:${TAG} to stage..."
-    build job: env.JOB_NAME, parameters: [
-        string(name: 'TARGET_ENV', value: 'stage'),
-        string(name: 'IMAGE_TAG', value: TAG),
-        booleanParam(name: 'ROLLBACK', value: true),
-        string(name: 'NAMESPACE_DEV', value: params.NAMESPACE_DEV),
-        string(name: 'NAMESPACE_STAGE', value: params.NAMESPACE_STAGE),
-        string(name: 'NAMESPACE_PROD', value: params.NAMESPACE_PROD)
-    ]
-}
 
-if (TARGET_ENV == 'stag' && !ROLLBACK) {
-    stage('Approval for Production Deployment') {
-        timeout(time: 10, unit: 'MINUTES') {      // auto-cancel after 10 min
-            input message: "Promote ${IMAGE_REPO}:${TAG} to STAGE?", ok: "Deploy to Production"
+        // ---------- 6. Health Verification ----------
+        stage('Verify Deployment') {
+            withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
+                sh """
+                echo "Checking /health endpoint..."
+                kubectl --kubeconfig \$KUBECONFIG_PATH port-forward svc/simple-app-service 7070:80 -n ${TARGET_NS} &
+                PF_PID=\$!
+                sleep 5
+                STATUS=\$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7070/health)
+                kill \$PF_PID || true
+                if [ "\$STATUS" -ne 200 ]; then
+                    echo "Health check failed (\$STATUS)"
+                    exit 1
+                fi
+                echo "Healthy (HTTP 200)"
+                """
+            }
         }
-    }
 
-    echo "Promoting image ${IMAGE_REPO}:${TAG} to Production..."
-    build job: env.JOB_NAME, parameters: [
-        string(name: 'TARGET_ENV', value: 'prod'),
-        string(name: 'IMAGE_TAG', value: TAG),
-        booleanParam(name: 'ROLLBACK', value: true),
-        string(name: 'NAMESPACE_DEV', value: params.NAMESPACE_DEV),
-        string(name: 'NAMESPACE_STAGE', value: params.NAMESPACE_STAGE),
-        string(name: 'NAMESPACE_PROD', value: params.NAMESPACE_PROD)
-    ]
-}
+        if (TARGET_ENV == 'dev' && !ROLLBACK) {
+            stage('Approval for Stage Deployment') {
+                timeout(time: 10, unit: 'MINUTES') {      // auto-cancel after 10 min
+                    input message: "Promote ${IMAGE_REPO}:${TAG} to STAGE?", ok: "Deploy to Stage"
+                }
+            }
+
+            echo "Promoting image ${IMAGE_REPO}:${TAG} to stage..."
+            build job: env.JOB_NAME, parameters: [
+                string(name: 'TARGET_ENV', value: 'stage'),
+                string(name: 'IMAGE_TAG', value: TAG),
+                booleanParam(name: 'ROLLBACK', value: true),
+                string(name: 'NAMESPACE_DEV', value: params.NAMESPACE_DEV),
+                string(name: 'NAMESPACE_STAGE', value: params.NAMESPACE_STAGE),
+                string(name: 'NAMESPACE_PROD', value: params.NAMESPACE_PROD)
+            ]
+        }
+
+        if (TARGET_ENV == 'stage' && !ROLLBACK) { // CORRECTED 'stag' to 'stage'
+            stage('Approval for Production Deployment') {
+                timeout(time: 10, unit: 'MINUTES') {      // auto-cancel after 10 min
+                    input message: "Promote ${IMAGE_REPO}:${TAG} to PRODUCTION?", ok: "Deploy to Production"
+                }
+            }
+
+            echo "Promoting image ${IMAGE_REPO}:${TAG} to Production..."
+            build job: env.JOB_NAME, parameters: [
+                string(name: 'TARGET_ENV', value: 'prod'),
+                string(name: 'IMAGE_TAG', value: TAG),
+                booleanParam(name: 'ROLLBACK', value: true),
+                string(name: 'NAMESPACE_DEV', value: params.NAMESPACE_DEV),
+                string(name: 'NAMESPACE_STAGE', value: params.NAMESPACE_STAGE),
+                string(name: 'NAMESPACE_PROD', value: params.NAMESPACE_PROD)
+            ]
+        }
         // ---------- 7. Cleanup ----------
-    stage('Post-Build Cleanup') {
-    sh "docker rmi ${IMAGE_REPO}:${TAG} || true"
-    }
-    }
-finally {
-    // ---------- Notify & Audit (always runs) ----------
-    // Derive status and a few useful facts
-    def STATUS = currentBuild.currentResult ?: 'SUCCESS'
-    def SUMMARY = """
+        stage('Post-Build Cleanup') {
+            sh "docker rmi ${IMAGE_REPO}:${TAG} || true"
+            cleanWs()
+        }
+    } // CLOSING BRACE for the 'try' block
+    finally {
+        // ---------- Notify & Audit (always runs) ----------
+        // Derive status and a few useful facts
+        def STATUS = currentBuild.currentResult ?: 'SUCCESS'
+        def SUMMARY = """
 ----------------------------------------
 Deployment Summary
 Env:        ${TARGET_ENV}
@@ -176,28 +179,28 @@ Status:     ${STATUS}
 ----------------------------------------
 """
 
-    echo SUMMARY
+        echo SUMMARY
 
-    // Optional: fetch running image in cluster for proof (ignore errors)
-    withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
-      sh """
-        echo "Cluster image in ${TARGET_NS}:"
-        kubectl --kubeconfig $KUBECONFIG_PATH -n ${TARGET_NS} \
-          get deploy simple-app -o=jsonpath='{.spec.template.spec.containers[0].image}{"\\n"}' || true
-      """
+        // Optional: fetch running image in cluster for proof (ignore errors)
+        withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
+          sh """
+            echo "Cluster image in ${TARGET_NS}:"
+            kubectl --kubeconfig \$KUBECONFIG_PATH -n ${TARGET_NS} \
+              get deploy simple-app -o=jsonpath='{.spec.template.spec.containers[0].image}{"\\n"}' || true
+          """
+        }
+
+        // Email notifications (requires Email Extension plugin configured)
+        // try {
+        //   emailext(
+        //     subject: "[${STATUS}] ${JOB_NAME} #${BUILD_NUMBER} → ${TARGET_ENV}",
+        //     body: """${SUMMARY}Console: ${env.BUILD_URL}console""",
+        //     to: 'rakshitsen1@gmai.com'
+        //   )
+        // } catch (ignored) {
+        //   echo "Email not sent (plugin not configured)."
+        // }
+
+
     }
-
-    // Email notifications (requires Email Extension plugin configured)
-    // try {
-    //   emailext(
-    //     subject: "[${STATUS}] ${JOB_NAME} #${BUILD_NUMBER} → ${TARGET_ENV}",
-    //     body: """${SUMMARY}Console: ${env.BUILD_URL}console""",
-    //     to: 'rakshitsen1@gmai.com'
-    //   )
-    // } catch (ignored) {
-    //   echo "Email not sent (plugin not configured)."
-    // }
-
-
-  }
 } // end of node
