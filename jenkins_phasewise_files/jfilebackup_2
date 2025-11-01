@@ -118,26 +118,6 @@ stage('Verify Deployment') {
     }
 }
 
-if (TARGET_ENV == 'dev' && !ROLLBACK) {
-    stage('Approval for Stage Deployment') {
-        timeout(time: 10, unit: 'MINUTES') {      // auto-cancel after 10 min
-            input message: "Promote ${IMAGE_REPO}:${TAG} to STAGE?", ok: "Deploy to Stage"
-        }
-    }
-
-    echo "Promoting image ${IMAGE_REPO}:${TAG} to stage..."
-    build job: env.JOB_NAME, parameters: [
-        string(name: 'TARGET_ENV', value: 'stage'),
-        string(name: 'IMAGE_TAG', value: TAG),
-        booleanParam(name: 'ROLLBACK', value: true),
-        string(name: 'NAMESPACE_DEV', value: params.NAMESPACE_DEV),
-        string(name: 'NAMESPACE_STAGE', value: params.NAMESPACE_STAGE),
-        string(name: 'NAMESPACE_PROD', value: params.NAMESPACE_PROD)
-    ]
-}
-
-        
-
 
     // ---------- 7. Cleanup ----------
     stage('Post-Build Cleanup') {
