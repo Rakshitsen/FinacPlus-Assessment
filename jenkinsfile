@@ -56,10 +56,10 @@ node {
             --severity HIGH,CRITICAL \
             --ignore-unfixed \
             --format table \
-            --output trivy-report-${BUILD_NUMBER}.txt \
+            --output trivy-report-${TAG}.txt \
             ${IMAGE_REPO}:${TAG} || true
     """
-     archiveArtifacts artifacts: "trivy-report-${env.BUILD_NUMBER}.txt", fingerprint: true
+     archiveArtifacts artifacts: "trivy-report-${env.TAG}.txt", fingerprint: true
 }
 
 
