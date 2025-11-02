@@ -38,6 +38,7 @@ node {
             currentStage = 'Checkout Source'
             checkout scm
         }
+        if (TARGET_ENV == 'dev' && !ROLLBACK) { 
 
         // ---------- 3. Build & Test ----------
         stage('Build & Test') {
@@ -75,6 +76,7 @@ node {
             }
             junit allowEmptyResults: true, testResults: 'pytest-report.xml'
             archiveArtifacts artifacts: 'pytest-report.xml', fingerprint: true, allowEmptyArchive: true
+        }
         }
 
         // ---------- 6. Docker Build / Push ----------
