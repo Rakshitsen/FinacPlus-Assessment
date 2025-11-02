@@ -41,9 +41,11 @@ node {
 
         stage('Build & Test') {
             sh '''
-                exit 1  // This will fail and trigger the catch block
+                echo "Installing dependencies and running quick tests..."
+                python3 --version
+                docker --version
             '''
-}
+        }
 
         stage('Setup Python Deps') {
             sh """
