@@ -52,12 +52,12 @@ node {
 stage('Lint & Unit Tests') {
   environment { PYTHONPATH = "${env.WORKSPACE}" }
   steps {
-    sh '''
+    sh """
       set -e
       . $VENV/bin/activate
       ruff check .
       python -m pytest -q --maxfail=1 --disable-warnings --junitxml=pytest-report.xml
-    '''
+    """
   }
 }
 post {
