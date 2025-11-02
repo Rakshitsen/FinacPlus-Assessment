@@ -206,6 +206,22 @@ node {
             cleanWs()
         }
     } // CLOSING BRACE for the 'try' block
+
+     catch (Exception e) {
+        // This catches ANY error from any stage
+        currentBuild.result = 'FAILURE'
+        
+        echo """
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BUILD FAILED
+Error: ${e.message}
+Build: #${BUILD_NUMBER}
+Console: ${env.BUILD_URL}console
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+        
+    } // CLOSING BRACE for the 'catch' block
+
     finally {
         // ---------- Notify & Audit (always runs) ----------
         // Derive status and a few useful facts
