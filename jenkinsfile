@@ -3,15 +3,15 @@
 node {
     // ---------- 1. Initialize ----------
     properties([
-    parameters([
-        choice(name: 'TARGET_ENV', choices: ['dev','stage','prod'], description: 'Where to deploy/promote'),
-        string(name: 'IMAGE_TAG', defaultValue: "${BUILD_NUMBER}", description: 'Image tag to deploy or promote'),
-        booleanParam(name: 'ROLLBACK', defaultValue: false, description: 'If true, deploy IMAGE_TAG without building'),
-        string(name: 'NAMESPACE_DEV', defaultValue: 'dev', description: 'Namespace for dev'),
-        string(name: 'NAMESPACE_STAGE', defaultValue: 'stage', description: 'Namespace for stage'),
-        string(name: 'NAMESPACE_PROD', defaultValue: 'prod', description: 'Namespace for prod')
-  ])
-])
+        parameters([
+            choice(name: 'TARGET_ENV', choices: ['dev','stage','prod'], description: 'Where to deploy/promote'),
+            string(name: 'IMAGE_TAG', defaultValue: "${BUILD_NUMBER}", description: 'Image tag to deploy or promote'),
+            booleanParam(name: 'ROLLBACK', defaultValue: false, description: 'If true, deploy IMAGE_TAG without building'),
+            string(name: 'NAMESPACE_DEV', defaultValue: 'dev', description: 'Namespace for dev'),
+            string(name: 'NAMESPACE_STAGE', defaultValue: 'stage', description: 'Namespace for stage'),
+            string(name: 'NAMESPACE_PROD', defaultValue: 'prod', description: 'Namespace for prod')
+        ])
+    ])
     // Variables for image name, tags, and credentials
     def TAG = params.IMAGE_TAG
     def IMAGE_REPO = "rakshitsen/simple-app"
@@ -24,7 +24,7 @@ node {
     def ROLLBACK = params.ROLLBACK
     def VENV = "myenv"
 
-    try{
+    try {
         stage('Checkout Source') {
             // Pull latest code from main branch
             checkout scm
@@ -49,23 +49,23 @@ node {
                 pip install -r requirements.txt -r requirements-dev.txt
             """
         }
-stage('Lint & Unit Tests') {
-    withEnv(["PYTHONPATH=${env.WORKSPACE}"]) {
-        sh """
-            set -e
-            . $VENV/bin/activate
-            ruff check .
-            python -m pytest -q --maxfail=1 --disable-warnings --junitxml=pytest-report.xml
-            rm -rf $VENV
-        """
-    }
-    junit allowEmptyResults: true, testResults: 'pytest-report.xml'
-    archiveArtifacts artifacts: 'pytest-report.xml', fingerprint: true, allowEmptyArchive: true
-}
+        stage('Lint & Unit Tests') {
+            withEnv(["PYTHONPATH=${env.WORKSPACE}"]) {
+                sh """
+                    set -e
+                    . $VENV/bin/activate
+                    ruff check .
+                    python -m pytest -q --maxfail=1 --disable-warnings --junitxml=pytest-report.xml
+                    rm -rf $VENV
+                """
+            }
+            junit allowEmptyResults: true, testResults: 'pytest-report.xml'
+            archiveArtifacts artifacts: 'pytest-report.xml', fingerprint: true, allowEmptyArchive: true
+        }
 
 
 
-       if (!ROLLBACK && TARGET_ENV == 'dev') {
+        if (!ROLLBACK && TARGET_ENV == 'dev') {
             stage('Build Docker Image') {
                 sh """
                     echo "Building Docker image ${IMAGE_REPO}:${TAG}"
@@ -73,18 +73,18 @@ stage('Lint & Unit Tests') {
                     docker tag ${IMAGE_REPO}:${TAG} ${IMAGE_REPO}:latest
                 """
             }
-stage('Security Scan') {
-    sh """
-        echo "Scanning ${IMAGE_REPO}:${TAG} for vulnerabilities..."
-        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \\
-          aquasec/trivy:latest image --format table ${IMAGE_REPO}:${TAG} || true
-        
-        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \\
-          -v \$(pwd):/output \\
-          aquasec/trivy:latest image --format json --output /output/trivy-report-${BUILD_NUMBER}.json ${IMAGE_REPO}:${TAG} || true
-    """
-    archiveArtifacts artifacts: 'trivy-report-*.json', fingerprint: true, allowEmptyArchive: true
-}
+            stage('Security Scan') {
+                sh """
+                    echo "Scanning ${IMAGE_REPO}:${TAG} for vulnerabilities..."
+                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \\
+                      aquasec/trivy:latest image --format table ${IMAGE_REPO}:${TAG} || true
+                    
+                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \\
+                      -v \$(pwd):/output \\
+                      aquasec/trivy:latest image --format json --output /output/trivy-report-${BUILD_NUMBER}.json ${IMAGE_REPO}:${TAG} || true
+                """
+                archiveArtifacts artifacts: 'trivy-report-*.json', fingerprint: true, allowEmptyArchive: true
+            }
 
 
 
@@ -103,8 +103,8 @@ stage('Security Scan') {
                         """
                         sh """
                             cat > deploy-info-${BUILD_NUMBER}.txt <<EOF
-\$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE_REPO}:${TAG}")
-EOF
+                            \$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE_REPO}:${TAG}")
+                            EOF
                         """
                         archiveArtifacts artifacts: 'deploy-info-*.txt', fingerprint: true, followSymlinks: false
                     }
@@ -150,17 +150,17 @@ EOF
         stage('Verify Deployment') {
             withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
                 sh """
-                echo "Checking /health endpoint..."
-                kubectl --kubeconfig \$KUBECONFIG_PATH port-forward svc/simple-app-service 7070:80 -n ${TARGET_NS} &
-                PF_PID=\$!
-                sleep 5
-                STATUS=\$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7070/health)
-                kill \$PF_PID || true
-                if [ "\$STATUS" -ne 200 ]; then
-                    echo "Health check failed (\$STATUS)"
-                    exit 1
-                fi
-                echo "Healthy (HTTP 200)"
+                    echo "Checking /health endpoint..."
+                    kubectl --kubeconfig \$KUBECONFIG_PATH port-forward svc/simple-app-service 7070:80 -n ${TARGET_NS} &
+                    PF_PID=\$!
+                    sleep 5
+                    STATUS=\$(curl -s -o /dev/null -w "%{http_code}" http://localhost:7070/health)
+                    kill \$PF_PID || true
+                    if [ "\$STATUS" -ne 200 ]; then
+                        echo "Health check failed (\$STATUS)"
+                        exit 1
+                    fi
+                    echo "Healthy (HTTP 200)"
                 """
             }
         }
@@ -225,23 +225,12 @@ Status:     ${STATUS}
 
         // Optional: fetch running image in cluster for proof (ignore errors)
         withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
-          sh """
-            echo "Cluster image in ${TARGET_NS}:"
-            kubectl --kubeconfig \$KUBECONFIG_PATH -n ${TARGET_NS} \\
-              get deploy simple-app -o=jsonpath='{.spec.template.spec.containers[0].image}{"\\n"}' || true
-          """
+            sh """
+                echo "Cluster image in ${TARGET_NS}:"
+                kubectl --kubeconfig \$KUBECONFIG_PATH -n ${TARGET_NS} \\
+                  get deploy simple-app -o=jsonpath='{.spec.template.spec.containers[0].image}{"\\n"}' || true
+            """
         }
-
-        // Email notifications (requires Email Extension plugin configured)
-        // try {
-        //   emailext(
-        //     subject: "[${STATUS}] ${JOB_NAME} #${BUILD_NUMBER} → ${TARGET_ENV}",
-        //     body: """${SUMMARY}Console: ${env.BUILD_URL}console""",
-        //     to: 'rakshitsen1@gmai.com'
-        //   )
-        // } catch (ignored) {
-        //   echo "Email not sent (plugin not configured)."
-        // }
 
 
     }
