@@ -50,22 +50,17 @@ node {
             """
         }
 stage('Lint & Unit Tests') {
-  environment { PYTHONPATH = "${env.WORKSPACE}" }
-  steps {
-    sh """
-      set -e
-      . $VENV/bin/activate
-      ruff check .
-      python -m pytest -q --maxfail=1 --disable-warnings --junitxml=pytest-report.xml
-      rm -rf $VENV
-    """
-  }
-}
-post {
-  always {
+    withEnv(["PYTHONPATH=${env.WORKSPACE}"]) {
+        sh """
+            set -e
+            . $VENV/bin/activate
+            ruff check .
+            python -m pytest -q --maxfail=1 --disable-warnings --junitxml=pytest-report.xml
+            rm -rf $VENV
+        """
+    }
     junit allowEmptyResults: true, testResults: 'pytest-report.xml'
     archiveArtifacts artifacts: 'pytest-report.xml', fingerprint: true, allowEmptyArchive: true
-  }
 }
 
 
