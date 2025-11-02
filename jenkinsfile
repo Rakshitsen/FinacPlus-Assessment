@@ -40,7 +40,7 @@ node {
         }
 
 
-    stage('Setup Python Deps') {
+        stage('Setup Python Deps') {
              steps {
                 sh '''
                     set -e
@@ -52,18 +52,17 @@ node {
             }
 }
 
-stage('Lint & Unit Tests') {
-  steps {
-    sh '''
-      set -e
-      . $VENV/bin/activate
-      # Lint fast. Fail on any error.
-      ruff check .
-      # Run tests. Emit JUnit for Jenkins.
-      pytest -q --maxfail=1 --disable-warnings --junitxml=pytest-report.xml
-    '''
-  }
-}
+        stage('Lint & Unit Tests') {
+                steps {
+                    sh '''
+                    set -e
+                    . $VENV/bin/activate
+                    # Lint fast. Fail on any error.
+                    ruff check .
+                    # Run tests. Emit JUnit for Jenkins.
+                    pytest -q --maxfail=1 --disable-warnings --junitxml=pytest-report.xml
+                    '''
+                }}
 post {
   always {
     // surface test results in Jenkins UI
