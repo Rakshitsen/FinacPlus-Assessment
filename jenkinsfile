@@ -49,21 +49,24 @@ node {
                 pip install -r requirements.txt -r requirements-dev.txt
             """
         }
-        stage('Lint & Unit Tests') {
-            sh """
-                set -e
-                . $VENV/bin/activate
-                ruff check .
-                pytest -q --maxfail=1 --disable-warnings --junitxml=pytest-report.xml
-            """
-        }
-// After the stage closes
-                post {
-                    always {
-                        junit allowEmptyResults: true, testResults: 'pytest-report.xml'
-                        archiveArtifacts artifacts: 'pytest-report.xml', fingerprint: true, allowEmptyArchive: true
-                    }
-                }
+stage('Lint & Unit Tests') {
+  environment { PYTHONPATH = "${env.WORKSPACE}" }
+  steps {
+    sh '''
+      set -e
+      . $VENV/bin/activate
+      ruff check .
+      python -m pytest -q --maxfail=1 --disable-warnings --junitxml=pytest-report.xml
+    '''
+  }
+}
+post {
+  always {
+    junit allowEmptyResults: true, testResults: 'pytest-report.xml'
+    archiveArtifacts artifacts: 'pytest-report.xml', fingerprint: true, allowEmptyArchive: true
+  }
+}
+
 
 
        if (!ROLLBACK && TARGET_ENV == 'dev') {
