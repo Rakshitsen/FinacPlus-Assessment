@@ -45,15 +45,27 @@ Developer → GitHub → Jenkins → Docker Hub → Kubernetes (dev → stage �
 | **9. Post-Cleanup**         | Remove images, clean workspace                 |
 | **10. Audit Summary**       | Logs deployment metadata and digest            |
 
-**Dev**
+## Dev
+**Pipeline View**
 
 ![alt text](images/readme_1.png)
 
-**Stag**
+**Resource View**
+![alt text](images/readme_5.png)
+
+## Stag
+**Pipeline View**
 ![alt text](images/readme_3.png)
 
-**Prod**
+**Resource View**
+![alt text](images/readme_5.png)
+
+## Prod
+**Pipeline View**
 ![alt text](images/readme_4.png)
+
+**Resource View**
+![alt text](images/readme_6.png)
 ---
 
 ## 🔐 Security Highlights
