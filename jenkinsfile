@@ -60,12 +60,12 @@ stage('Lint & Unit Tests') {
     """
   }
 }
-post {
-  always {
-    junit allowEmptyResults: true, testResults: 'pytest-report.xml'
-    archiveArtifacts artifacts: 'pytest-report.xml', fingerprint: true, allowEmptyArchive: true
-  }
-}
+// post {
+//   always {
+//     junit allowEmptyResults: true, testResults: 'pytest-report.xml'
+//     archiveArtifacts artifacts: 'pytest-report.xml', fingerprint: true, allowEmptyArchive: true
+//   }
+// }
 
 
 
