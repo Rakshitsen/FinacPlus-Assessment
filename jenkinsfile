@@ -27,14 +27,14 @@ node {
 
     try {
         stage('Checkout Source') {
-            def currentStage = 'Checkout Source'
+            currentStage = 'Checkout Source'
             // Pull latest code from main branch
             checkout scm
         }
 
         // ---------- 2. Build ----------
         stage('Build & Test') {
-            def currentStage = 'Build & Test'
+            currentStage = 'Build & Test'
             sh '''
                 echo "Installing dependencies and running quick tests..."
                 python3 --version
@@ -43,7 +43,7 @@ node {
         }
 
         stage('Setup Python Deps') {
-            def currentStage = 'Setup Python Deps'
+            currentStage = 'Setup Python Deps'
             sh """
                 set -e
                 python3 -m venv $VENV
@@ -53,7 +53,7 @@ node {
             """
         }
         stage('Lint & Unit Tests') {
-            def currentStage = 'Lint & Unit Tests'
+            currentStage = 'Lint & Unit Tests'
             withEnv(["PYTHONPATH=${env.WORKSPACE}"]) {
                 sh """
                     set -e
@@ -72,7 +72,7 @@ node {
         if (!ROLLBACK && TARGET_ENV == 'dev') {
             
             stage('Build Docker Image') {
-                def currentStage = 'Build Docker Image'
+                currentStage = 'Build Docker Image'
                 sh """
                     echo "Building Docker image ${IMAGE_REPO}:${TAG}"
                     docker build -t ${IMAGE_REPO}:${TAG} .
@@ -80,7 +80,7 @@ node {
                 """
             }
             stage('Security Scan') {
-                def currentStage = 'Security Scan'
+                currentStage = 'Security Scan'
                 sh """
                     echo "Scanning ${IMAGE_REPO}:${TAG} for vulnerabilities..."
                     docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \\
@@ -96,7 +96,7 @@ node {
 
 
             stage('Push Image to Registry') {
-                def currentStage = 'Push Image to Registry'
+                currentStage = 'Push Image to Registry'
                 withCredentials([usernamePassword(credentialsId: REGISTRY_CREDS, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
                     withEnv(["DOCKER_CONFIG=${env.WORKSPACE}/.docker-tmp","IMAGE_REPO=${IMAGE_REPO}", "TAG=${TAG}"]) {
                         sh """#!/usr/bin/env bash
@@ -124,7 +124,7 @@ node {
 
 
         stage('Deploy to Kubernetes') {
-            def currentStage = 'Deploy to Kubernetes'
+            currentStage = 'Deploy to Kubernetes'
             withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
                 sh """
                     echo "Target env: ${TARGET_ENV}, namespace: ${TARGET_NS}, tag: ${TAG}"
@@ -157,7 +157,7 @@ node {
 
         // ---------- 6. Health Verification ----------
         stage('Verify Deployment') {
-            def currentStage = 'Verify Deployment'
+            currentStage = 'Verify Deployment'
             withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
                 sh """
                     echo "Checking /health endpoint..."
@@ -177,7 +177,7 @@ node {
 
         if (TARGET_ENV == 'dev' && !ROLLBACK) {
             stage('Approval for Stage Deployment') {
-                def currentStage = 'Approval for Stage Deployment'
+                currentStage = 'Approval for Stage Deployment'
                 timeout(time: 10, unit: 'MINUTES') {      
                     input message: "Promote ${IMAGE_REPO}:${TAG} to STAGE?", ok: "Deploy to Stage"
                 }
@@ -196,7 +196,7 @@ node {
 
         if (TARGET_ENV == 'stage' && !ROLLBACK) { 
             stage('Approval for Production Deployment') {
-                def currentStage = 'Approval for Production Deployment'
+                currentStage = 'Approval for Production Deployment'
                 timeout(time: 30, unit: 'MINUTES') {      
                     input message: "Promote ${IMAGE_REPO}:${TAG} to PRODUCTION?", ok: "Deploy to Production"
                 }
