@@ -1,119 +1,156 @@
-# FinacPlus Assessment — CI/CD Pipeline Project
+# 🌐 FinacPlus Assessment – Enterprise-Grade CI/CD Pipeline
 
-## 🚀 Overview
-
-This project implements a **complete DevSecOps CI/CD pipeline** using Jenkins, Docker, and Kubernetes.  
-It automates the full software delivery lifecycle — from code build to secure deployment — following real-world SRE and DevOps practices.
+> A complete **DevSecOps pipeline** built with **Jenkins, Docker, Kubernetes, and Trivy**, automating the software delivery lifecycle from code commit to production rollout.
 
 ---
 
-## 🧩 Tech Stack
+## 🧩 Architecture Overview
 
-| Component | Purpose |
-|-----------|---------|
-| **Jenkins** | CI/CD orchestrator (Scripted Pipeline) |
-| **Docker** | Build immutable container images |
-| **Docker Hub** | Central registry for image storage |
-| **Kubernetes (Kind)** | Deployment and runtime environment |
-| **Trivy** | Container image vulnerability scanning |
-| **Prometheus + Grafana** | Application metrics and monitoring |
-| **Flask (Python)** | Sample application for demonstration |
 
----
-
-## ⚙️ Pipeline Flow
+**Flow:**
 
 ```
-Git → Jenkins → Docker Hub → Kubernetes (dev → stage → prod)
+Developer → GitHub → Jenkins → Docker Hub → Kubernetes (dev → stage → prod)
+                     │
+                     ├── Trivy Scan (Security)
+                     ├── Approval Gates (Manual)
+                     └── Health Verification + Audit Logs
 ```
 
-### Stage Summary
+**Core Components:**
 
-| Stage | Description |
-|-------|-------------|
-| **1. Checkout Source** | Pull latest code from GitHub |
-| **2. Build & Test** | Validate Python and Docker setup |
-| **3. Build Docker Image** | Build versioned, immutable image |
-| **4. Security Scan (Trivy)** | Scan image for CVEs; archive JSON report |
-| **5. Push to Registry** | Push image to Docker Hub with both tag and `latest` |
-| **6. Deploy to Kubernetes** | Auto-create namespace if missing; update or create deployment |
-| **7. Verify Deployment** | Port-forward + `/health` check; kill background process safely |
-| **8. Manual Promotion Gates** | Require approval before deploying to Stage and Prod |
-| **9. Post-Build Cleanup** | Remove temporary images and workspace |
-| **10. Audit Summary** | Print deployment details; optional email notification |
+| Component                       | Role                                       |
+| ------------------------------- | ------------------------------------------ |
+| **GitHub**                      | Source control & Webhook trigger           |
+| **Jenkins (Scripted Pipeline)** | CI/CD automation engine                    |
+| **Docker & Docker Hub**         | Image build and registry                   |
+| **Kubernetes (Kind)**           | Deployment environment                     |
+| **Trivy**                       | Image vulnerability scanning               |
+| **Prometheus + Grafana**        | Monitoring and observability (to be added) |
 
 ---
 
-## 🛡️ Security & Compliance
+## ⚙️ Pipeline Summary
 
-- **Trivy Scan:** Detects vulnerabilities in Docker images before pushing.
-- **Immutable Images:** Each build produces a unique, traceable image tag.
-- **Rollback Support:** Deploy any previous image tag safely.
+| Stage                       | Description                                    |
+| --------------------------- | ---------------------------------------------- |
+| **1. Checkout Source**      | Fetch latest code and Jenkinsfile from GitHub  |
+| **2. Build & Unit Test**    | Python virtual env setup, linting, pytest      |
+| **3. Build Docker Image**   | Build image `rakshitsen/simple-app:<build>`    |
+| **4. Security Scan**        | Trivy vulnerability scan; JSON report archived |
+| **5. Push to Registry**     | Push image and extract immutable digest        |
+| **6. Deploy to Kubernetes** | Apply manifests; auto-create namespaces        |
+| **7. Verify Deployment**    | `/health` endpoint validation                  |
+| **8. Promotion Gates**      | Manual approvals for Stage/Prod                |
+| **9. Post-Cleanup**         | Remove images, clean workspace                 |
+| **10. Audit Summary**       | Logs deployment metadata and digest            |
+
+![alt text](images/readme_1.png)
+---
+
+## 🔐 Security Highlights
+
+* **Immutable Artifact Promotion:** Same image digest deployed across all environments
+* **Trivy Integration:** Identifies CVEs pre-deployment
+* **Credential Security:** Managed via Jenkins Credentials store
+* **Controlled Promotion:** Approval required for Stage and Prod
+* **Rollback Support:** `ROLLBACK=true` parameter redeploys stable digest
 
 ---
 
-## 📈 Monitoring & Observability
+## 🧰 Environment Setup
 
-- Integrated **Prometheus metrics exporter** in Flask app (`/metrics` endpoint).
-- **Grafana dashboards** display request count, latency, and health.
-- Liveness and readiness probes ensure self-healing pods.
+### Prerequisites
 
----
+* Docker & Docker Hub account
+* Jenkins with Docker and kubectl installed
+* Kind or Minikube Kubernetes cluster
+* GitHub repository connected with webhook
 
-## 🔄 Promotion Flow
+### Credentials to Configure in Jenkins
 
-| Environment | Trigger | Description |
-|-------------|---------|-------------|
-| **Dev** | Automatic on push | Build → Scan → Deploy |
-| **Stage** | Manual approval | Promotion from tested Dev image |
-| **Prod** | Manual approval (30 min window) | Final promotion of verified image |
-
----
-
-## 🧰 How to Run Locally
-
-### 1. Pre-requisites
-
-- Docker  
-- Kubernetes cluster (e.g., Kind or Minikube)  
-- Jenkins (with Docker + Kubectl + Git installed)
-
-### 2. Clone repository
-
-```bash
-git clone https://github.com/Rakshitsen/FinacPlus-Assessment.git
-```
-
-### 3. Set credentials in Jenkins
-
-- `Docker_cred` → Docker Hub username/password
-- `Git_cred` → GitHub access token
-- `KUBECONFIG_FILE` → Kubeconfig secret file
-
-### 4. Run job
-
-- Create a *Multibranch Pipeline Job* in Jenkins.
-- Point to this repository.
-- Build → approve promotions.
+| ID                | Type                  | Used For               |
+| ----------------- | --------------------- | ---------------------- |
+| `Docker_cred`     | Username & Password   | Push to Docker Hub     |
+| `KUBECONFIG_FILE` | Secret File           | Cluster authentication |
+| `Git_cred`        | Personal Access Token | SCM operations         |
 
 ---
 
-## 📄 Artifacts & Reports
+## 🔄 GitHub Webhook Integration
 
-- **Trivy Reports:** `trivy-report-<build>.json`
-- **Deployment Info:** `deploy-info-<build>.txt`
-- **Jenkins Logs:** Include rollout status, health, and image digest.
+1. In Jenkins job config: enable **"GitHub hook trigger for GITScm polling."**
+2. In GitHub repo:
+
+   ```
+   Settings → Webhooks → Add Webhook  
+   Payload URL: http://<jenkins-host>:8080/github-webhook/
+   Content type: application/json
+   Trigger: Just the push event
+   ```
+3. Push a commit → Jenkins auto-triggers pipeline.
+
+![alt text](images/readme_2.png)
 
 ---
 
-## 🧠 Key Learnings
+## 🧩 Jenkins Plugin Requirements
 
-- Build once → promote immutably → verify → rollback if needed.
-- CI/CD pipelines must be secure, observable, and self-healing.
-- Manual approvals and metrics visibility make the pipeline production-ready.
+| Plugin                             | Purpose                             |
+| ---------------------------------- | ----------------------------------- |
+| **Pipeline (workflow-aggregator)** | Enables Jenkinsfile execution       |
+| **Git & GitHub Integration**       | SCM connectivity + webhook triggers |
+| **Credentials Binding**            | Secure credentials injection        |
+| **Docker Pipeline**                | Image build and push                |
+| **Blue Ocean (optional)**          | Visual UI for pipelines             |
+| **Email Extension (optional)**     | Notifications                       |
+
+
+---
+
+## 🧾 Artifacts & Reporting
+
+| Artifact                    | Purpose              |
+| --------------------------- | -------------------- |
+| `trivy-report-<build>.json` | Security scan result |
+| `image-digest.env`          | Immutable SHA record |
+| `pytest-report.xml`         | Unit test report     |
+| `deploy-info.txt`           | Deployment summary   |
+
+All are **fingerprinted and archived** in Jenkins for traceability.
+
+---
+
+## 📊 Monitoring Integration *(Planned)*
+
+* **Prometheus metrics** via `/metrics` endpoint.
+* **Grafana dashboard** for uptime, latency, and health visualization.
+]*
+
+---
+
+## 💡 Key Learnings
+
+* Build once, promote everywhere — guarantees immutability.
+* Automate everything except trust (manual approval gates).
+* Secure, auditable, rollback-ready delivery.
+* Mirrors real-world DevOps workflows used in production pipelines.
 
 ---
 
 ## 👤 Author
 
-**Rakshit Sen**
+**Rakshit Sen**  
+DevOps & Cloud Engineering | 2025
+
+---
+
+## 📚 For Detailed Documentation
+
+See [`pipeline-doc.md`](pipeline-doc.md) for:
+
+* Stage-by-stage technical explanation
+* Trivy integration details
+* Shell safety, digest logic, and rollback notes
+
+---
