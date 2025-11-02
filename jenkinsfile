@@ -39,6 +39,11 @@ node {
             '''
         }
 
+        stage('Build & Test') {
+            sh '''
+                exit 1  // This will fail and trigger the catch block
+            '''
+}
 
         stage('Setup Python Deps') {
             sh """
@@ -220,6 +225,7 @@ Console: ${env.BUILD_URL}console
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
         
+    
     } // CLOSING BRACE for the 'catch' block
 
     finally {
