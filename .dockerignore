@@ -1,3 +1,4 @@
 k8s/
 Dockerfile
 trivy-cache/
+myenv/
