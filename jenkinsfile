@@ -1,18 +1,24 @@
+// ======================================================================
 // Scripted Pipeline for FinacPlus Assessment
 // CI/CD: Git → Jenkins → Docker Hub → Kubernetes (kind cluster)
+// ======================================================================
+
 node {
+
     // ---------- 1. Initialize ----------
     properties([
         parameters([
-            choice(name: 'TARGET_ENV', choices: ['dev','stage','prod'], description: 'Where to deploy/promote'),
+            choice(name: 'TARGET_ENV', choices: ['dev', 'stage', 'prod'], description: 'Where to deploy/promote'),
             string(name: 'IMAGE_TAG', defaultValue: "${BUILD_NUMBER}", description: 'Image tag to deploy or promote'),
+            string(name: 'IMAGE_DIGEST', defaultValue: '', description: 'Immutable image digest for promotion'),
             booleanParam(name: 'ROLLBACK', defaultValue: false, description: 'If true, deploy IMAGE_TAG without building'),
             string(name: 'NAMESPACE_DEV', defaultValue: 'dev', description: 'Namespace for dev'),
             string(name: 'NAMESPACE_STAGE', defaultValue: 'stage', description: 'Namespace for stage'),
             string(name: 'NAMESPACE_PROD', defaultValue: 'prod', description: 'Namespace for prod')
         ])
     ])
-    // Variables for image name, tags, and credentials
+
+    // ---------- Variables ----------
     def TAG = params.IMAGE_TAG
     def IMAGE_REPO = "rakshitsen/simple-app"
     def REGISTRY_CREDS = "Docker_cred"
@@ -26,13 +32,14 @@ node {
     def currentStage = 'Initialization'
 
     try {
+
+        // ---------- 2. Checkout Source ----------
         stage('Checkout Source') {
             currentStage = 'Checkout Source'
-            // Pull latest code from main branch
             checkout scm
         }
 
-        // ---------- 2. Build ----------
+        // ---------- 3. Build & Test ----------
         stage('Build & Test') {
             currentStage = 'Build & Test'
             sh '''
@@ -42,6 +49,7 @@ node {
             '''
         }
 
+        // ---------- 4. Python Setup ----------
         stage('Setup Python Deps') {
             currentStage = 'Setup Python Deps'
             sh """
@@ -52,6 +60,8 @@ node {
                 pip install -r requirements.txt -r requirements-dev.txt
             """
         }
+
+        // ---------- 5. Lint & Unit Tests ----------
         stage('Lint & Unit Tests') {
             currentStage = 'Lint & Unit Tests'
             withEnv(["PYTHONPATH=${env.WORKSPACE}"]) {
@@ -67,10 +77,9 @@ node {
             archiveArtifacts artifacts: 'pytest-report.xml', fingerprint: true, allowEmptyArchive: true
         }
 
-
-
+        // ---------- 6. Docker Build / Push ----------
         if (!ROLLBACK && TARGET_ENV == 'dev') {
-            
+
             stage('Build Docker Image') {
                 currentStage = 'Build Docker Image'
                 sh """
@@ -79,26 +88,25 @@ node {
                     docker tag ${IMAGE_REPO}:${TAG} ${IMAGE_REPO}:latest
                 """
             }
+
             stage('Security Scan') {
                 currentStage = 'Security Scan'
                 sh """
                     echo "Scanning ${IMAGE_REPO}:${TAG} for vulnerabilities..."
-                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \\
+                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
                       aquasec/trivy:latest image --format table ${IMAGE_REPO}:${TAG} || true
                     
-                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \\
-                      -v \$(pwd):/output \\
+                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+                      -v \$(pwd):/output \
                       aquasec/trivy:latest image --format json --output /output/trivy-report-${BUILD_NUMBER}.json ${IMAGE_REPO}:${TAG} || true
                 """
                 archiveArtifacts artifacts: 'trivy-report-*.json', fingerprint: true, allowEmptyArchive: true
             }
 
-
-
             stage('Push Image to Registry') {
                 currentStage = 'Push Image to Registry'
                 withCredentials([usernamePassword(credentialsId: REGISTRY_CREDS, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
-                    withEnv(["DOCKER_CONFIG=${env.WORKSPACE}/.docker-tmp","IMAGE_REPO=${IMAGE_REPO}", "TAG=${TAG}"]) {
+                    withEnv(["DOCKER_CONFIG=${env.WORKSPACE}/.docker-tmp", "IMAGE_REPO=${IMAGE_REPO}", "TAG=${TAG}"]) {
                         sh """#!/usr/bin/env bash
                             set -euo pipefail
                             mkdir -p \$DOCKER_CONFIG
@@ -109,53 +117,61 @@ node {
                             docker logout || true
                             rm -rf \$DOCKER_CONFIG
                         """
+
+                        // Capture digest into file
                         sh """
-                            cat > deploy-info-${BUILD_NUMBER}.txt <<EOF
-                            \$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE_REPO}:${TAG}")
-                            EOF
+                            DIGEST=\$(docker inspect --format='{{index .RepoDigests 0}}' ${IMAGE_REPO}:${TAG})
+                            echo "IMAGE_DIGEST=\$DIGEST" > image-digest.env
                         """
-                        archiveArtifacts artifacts: 'deploy-info-*.txt', fingerprint: true, followSymlinks: false
+                        archiveArtifacts artifacts: 'image-digest.env', fingerprint: true
                     }
                 }
+
+                script {
+                    def digestFile = readFile('image-digest.env').trim()
+                    env.IMAGE_DIGEST = digestFile.split('=')[1]
+                    echo "Captured image digest: ${env.IMAGE_DIGEST}"
+                }
             }
+
         } else {
             echo "Skipping build/push. Using existing image tag: ${TAG}"
         }
 
-
+        // ---------- 7. Deploy to Kubernetes ----------
         stage('Deploy to Kubernetes') {
             currentStage = 'Deploy to Kubernetes'
             withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
+                def imageToDeploy = env.IMAGE_DIGEST ?: "${IMAGE_REPO}:${TAG}"
                 sh """
+                    echo "Deploying image: ${imageToDeploy}"
                     echo "Target env: ${TARGET_ENV}, namespace: ${TARGET_NS}, tag: ${TAG}"
 
-                    # Ensure namespace exists
-                    kubectl --kubeconfig \$KUBECONFIG_PATH get ns ${TARGET_NS} >/dev/null 2>&1 || \\
+                    kubectl --kubeconfig \$KUBECONFIG_PATH get ns ${TARGET_NS} >/dev/null 2>&1 || \
                       kubectl --kubeconfig \$KUBECONFIG_PATH create ns ${TARGET_NS}
 
-                    # First-time create vs update
                     if kubectl --kubeconfig \$KUBECONFIG_PATH -n ${TARGET_NS} get deploy simple-app >/dev/null 2>&1; then
-                      echo "Deployment exists — updating image"
-                      kubectl --kubeconfig \$KUBECONFIG_PATH -n ${TARGET_NS} \\
-                        set image deploy/simple-app simple-app=${IMAGE_REPO}:${TAG}
+                        echo "Deployment exists — updating image"
+                        kubectl --kubeconfig \$KUBECONFIG_PATH -n ${TARGET_NS} \
+                            set image deploy/simple-app simple-app=${imageToDeploy}
                     else
-                      echo "No deployment — creating resources"
-                      kubectl --kubeconfig \$KUBECONFIG_PATH -n ${TARGET_NS} apply -f k8s/deployment.yml
-                      kubectl --kubeconfig \$KUBECONFIG_PATH -n ${TARGET_NS} \\
-                        set image deploy/simple-app simple-app=${IMAGE_REPO}:${TAG}
+                        echo "No deployment — creating resources"
+                        kubectl --kubeconfig \$KUBECONFIG_PATH -n ${TARGET_NS} apply -f k8s/deployment.yml
+                        kubectl --kubeconfig \$KUBECONFIG_PATH -n ${TARGET_NS} \
+                            set image deploy/simple-app simple-app=${imageToDeploy}
                     fi
 
                     echo "Waiting for rollout..."
                     kubectl --kubeconfig \$KUBECONFIG_PATH -n ${TARGET_NS} rollout status deploy/simple-app
 
                     echo "Running image in ${TARGET_NS}:"
-                    kubectl --kubeconfig \$KUBECONFIG_PATH -n ${TARGET_NS} get deploy simple-app -o=jsonpath='{.spec.template.spec.containers[0].image}{"\\n"}'
+                    kubectl --kubeconfig \$KUBECONFIG_PATH -n ${TARGET_NS} get deploy simple-app \
+                        -o=jsonpath='{.spec.template.spec.containers[0].image}{"\\n"}'
                 """
             }
         }
 
-
-        // ---------- 6. Health Verification ----------
+        // ---------- 8. Verify Deployment ----------
         stage('Verify Deployment') {
             currentStage = 'Verify Deployment'
             withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
@@ -175,10 +191,11 @@ node {
             }
         }
 
+        // ---------- 9. Approval Gates ----------
         if (TARGET_ENV == 'dev' && !ROLLBACK) {
             stage('Approval for Stage Deployment') {
                 currentStage = 'Approval for Stage Deployment'
-                timeout(time: 10, unit: 'MINUTES') {      
+                timeout(time: 10, unit: 'MINUTES') {
                     input message: "Promote ${IMAGE_REPO}:${TAG} to STAGE?", ok: "Deploy to Stage"
                 }
             }
@@ -187,6 +204,7 @@ node {
             build job: env.JOB_NAME, parameters: [
                 string(name: 'TARGET_ENV', value: 'stage'),
                 string(name: 'IMAGE_TAG', value: TAG),
+                string(name: 'IMAGE_DIGEST', value: env.IMAGE_DIGEST),
                 booleanParam(name: 'ROLLBACK', value: false),
                 string(name: 'NAMESPACE_DEV', value: params.NAMESPACE_DEV),
                 string(name: 'NAMESPACE_STAGE', value: params.NAMESPACE_STAGE),
@@ -194,10 +212,10 @@ node {
             ]
         }
 
-        if (TARGET_ENV == 'stage' && !ROLLBACK) { 
+        if (TARGET_ENV == 'stage' && !ROLLBACK) {
             stage('Approval for Production Deployment') {
                 currentStage = 'Approval for Production Deployment'
-                timeout(time: 30, unit: 'MINUTES') {      
+                timeout(time: 30, unit: 'MINUTES') {
                     input message: "Promote ${IMAGE_REPO}:${TAG} to PRODUCTION?", ok: "Deploy to Production"
                 }
             }
@@ -206,61 +224,59 @@ node {
             build job: env.JOB_NAME, parameters: [
                 string(name: 'TARGET_ENV', value: 'prod'),
                 string(name: 'IMAGE_TAG', value: TAG),
+                string(name: 'IMAGE_DIGEST', value: env.IMAGE_DIGEST),
                 booleanParam(name: 'ROLLBACK', value: true),
                 string(name: 'NAMESPACE_DEV', value: params.NAMESPACE_DEV),
                 string(name: 'NAMESPACE_STAGE', value: params.NAMESPACE_STAGE),
                 string(name: 'NAMESPACE_PROD', value: params.NAMESPACE_PROD)
             ]
         }
-        // ---------- 7. Cleanup ----------
+
+        // ---------- 10. Cleanup ----------
         stage('Post-Build Cleanup') {
+            currentStage = 'Post-Build Cleanup'
             sh "docker rmi ${IMAGE_REPO}:${TAG} || true"
             cleanWs()
         }
-    } // CLOSING BRACE for the 'try' block
 
-     catch (Exception e) {
-        // This catches ANY error from any stage
+    } // try
+
+    catch (Exception e) {
         currentBuild.result = 'FAILURE'
-        
         echo """
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 BUILD FAILED
+Stage: ${currentStage}
 Error: ${e.message}
 Build: #${BUILD_NUMBER}
 Console: ${env.BUILD_URL}console
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
-        
-    
-    } // CLOSING BRACE for the 'catch' block
+    }
 
     finally {
-        // ---------- Notify & Audit (always runs) ----------
-        // Derive status and a few useful facts
+        // ---------- 11. Audit & Summary ----------
         def STATUS = currentBuild.currentResult ?: 'SUCCESS'
         def SUMMARY = """
 ----------------------------------------
 Deployment Summary
 Env:        ${TARGET_ENV}
 Namespace:  ${TARGET_NS}
-Image:      ${IMAGE_REPO}:${TAG}
+Image Tag:  ${IMAGE_REPO}:${TAG}
+Digest:     ${env.IMAGE_DIGEST ?: 'N/A'}
 Build #:    ${BUILD_NUMBER}
 Status:     ${STATUS}
 ----------------------------------------
 """
-
         echo SUMMARY
 
-        // Optional: fetch running image in cluster for proof (ignore errors)
         withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG_PATH')]) {
             sh """
-                echo "Cluster image in ${TARGET_NS}:"
-                kubectl --kubeconfig \$KUBECONFIG_PATH -n ${TARGET_NS} \\
+                echo "Cluster image running in ${TARGET_NS}:"
+                kubectl --kubeconfig \$KUBECONFIG_PATH -n ${TARGET_NS} \
                   get deploy simple-app -o=jsonpath='{.spec.template.spec.containers[0].image}{"\\n"}' || true
             """
         }
-
-
     }
-} // end of node
+
+} // end node
