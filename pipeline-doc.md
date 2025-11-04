@@ -1,8 +1,3 @@
-Excellent. I’ll now create the **complete, final professional Markdown documentation** — readable, technically detailed, and recruiter-ready.
-It will reflect exactly how a DevOps engineer documents an enterprise-grade pipeline.
-
----
-
 # 🚀 CI/CD Pipeline for Flask Application
 
 **Platform:** Jenkins | Docker | Kubernetes (kind)
