@@ -40,9 +40,9 @@ node {
         }
         if (TARGET_ENV == 'dev' && !ROLLBACK) { 
 
-        // ---------- 3. Build & Test ----------
-        stage('Build & Test') {
-            currentStage = 'Build & Test'
+        // ---------- 3. Env  Check ----------
+        stage('Env Check') {
+            currentStage = 'Env Check'
             sh '''
                 echo "Installing dependencies and running quick tests..."
                 python3 --version
@@ -51,7 +51,7 @@ node {
         }
 
         // ---------- 4. Python Setup ----------
-        stage('Setup Python Deps') {
+        stage('Python Env Setup') {
             currentStage = 'Setup Python Deps'
             sh """
                 set -e
