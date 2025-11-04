@@ -50,9 +50,9 @@ node {
             '''
         }
 
-        // ---------- 4. Python Setup ----------
+        // ---------- 4. Python Env Setup----------
         stage('Python Env Setup') {
-            currentStage = 'Setup Python Deps'
+            currentStage = 'Python Env Setup'
             sh """
                 set -e
                 python3 -m venv $VENV
