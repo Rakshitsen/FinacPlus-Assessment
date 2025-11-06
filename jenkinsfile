@@ -33,11 +33,11 @@ node {
 
     try {
 
-        // ---------- 2. Checkout Source ----------
-        // stage('Checkout Source') {
-        //     currentStage = 'Checkout Source'
-        //     checkout scm
-        // }
+        ---------- 2. Checkout Source ----------
+        stage('Checkout Source') {
+            currentStage = 'Checkout Source'
+            checkout scm
+        }
         if (TARGET_ENV == 'dev' && !ROLLBACK) { 
 
         // ---------- 3. Env  Check ----------
