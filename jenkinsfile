@@ -33,7 +33,7 @@ node {
 
     try {
 
-        ---------- 2. Checkout Source ----------
+        // ---------- 2. Checkout Source ----------
         stage('Checkout Source') {
             currentStage = 'Checkout Source'
             checkout scm
