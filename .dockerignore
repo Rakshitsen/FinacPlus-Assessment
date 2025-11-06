@@ -2,3 +2,8 @@ k8s/
 Dockerfile
 trivy-cache/
 myenv/
+scripts/
+test/
+jenkins_phasewise_files/
+.gitignore
+pipeline-doc.md 
