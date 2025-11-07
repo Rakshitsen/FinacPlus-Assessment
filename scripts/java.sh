@@ -1,5 +1,4 @@
-sudo apt update
-sudo apt install fontconfig openjdk-21-jre
+sudo apt install -y fontconfig openjdk-21-jre
 java -version
 
 

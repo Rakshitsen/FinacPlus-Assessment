@@ -18,3 +18,4 @@ sudo apt install -y kubectl
 
 # Verify
 kubectl version --client
+
