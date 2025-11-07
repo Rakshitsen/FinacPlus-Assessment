@@ -17,6 +17,7 @@ sudo usermod -aG docker $USER
 sudo usermod -aG docker jenkins
 newgrp docker
 sudo systemctl restart docker
+sudo systemctl restart docker.service
 sudo systemctl restart jenkins.service
 
 
