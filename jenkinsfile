@@ -48,7 +48,7 @@ node {
                 python3 --version
                 docker --version
             '''
-        }
+            }
 
         // ---------- 4. Python Env Setup----------
         stage('Python Env Setup') {
