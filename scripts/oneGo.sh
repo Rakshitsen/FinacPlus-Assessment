@@ -273,3 +273,13 @@ echo "- If 'docker' needs no sudo: log out and log back in to refresh group memb
 
 
 echo "cat ~/.kube/config"
+
+
+
+
+# kubectl create namespace monitoring
+# kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/main/manifests/prometheus-prometheus.yaml -n monitoring
+# kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/main/manifests/setup/
+# kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/main/manifests/
+# kubectl get pods -n monitoring
+# kubectl port-forward svc/prometheus-operated -n monitoring 9090:9090
