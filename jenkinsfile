@@ -36,7 +36,12 @@ node {
         // ---------- 2. Checkout Source ----------
         stage('Checkout Source') {
             currentStage = 'Checkout Source'
-            checkout scm
+            checkout([
+                $class: 'GitSCM',
+                branches: scm.branches,
+                extensions: [[$class: 'CloneOption', depth: 1, noTags: false, reference: '', shallow: true]],
+                userRemoteConfigs: scm.userRemoteConfigs
+            ])
         }
         if (TARGET_ENV == 'dev' && !ROLLBACK) { 
 
